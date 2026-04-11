@@ -54,6 +54,19 @@ function build_local_iso(date_str, time_str) {
     return `${date_str}T${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:00`;
 }
 
+// Given a start ISO string and an "HH:MM" time, return the ISO datetime that
+// falls within the 24-hour window following start_iso.  If the naive same-day
+// result would be at or before start_iso, advance by one calendar day.
+function resolve_time_after(start_iso, time_str) {
+    const candidate = build_local_iso(date_of(start_iso), time_str);
+    if (candidate <= start_iso) {
+        const d = new Date(date_of(start_iso) + 'T12:00:00');
+        d.setDate(d.getDate() + 1);
+        return build_local_iso(local_date_str(d), time_str);
+    }
+    return candidate;
+}
+
 // Which local date (YYYY-MM-DD) does an ISO string fall on?
 function date_of(iso_str) {
     return local_date_str(parse_dt(iso_str));
@@ -526,7 +539,14 @@ const app = Vue.createApp({
 
             if (field === 'started_at' || field === 'ended_at') {
                 if (!value || !value.match(/^\d{1,2}:\d{2}$/)) return;
-                const iso = build_local_iso(date_str, value);
+                let iso;
+                if (field === 'ended_at') {
+                    const entry = this.entries.find(e => e.id === id);
+                    iso = entry ? resolve_time_after(entry.started_at, value)
+                                : build_local_iso(date_str, value);
+                } else {
+                    iso = build_local_iso(date_str, value);
+                }
                 this.conn.emit('update_entry', { id, [field]: iso });
             } else if (field === 'description') {
                 this.conn.emit('update_entry', { id, description: value });
@@ -568,8 +588,7 @@ const app = Vue.createApp({
                 this.toast('Enter a valid time HH:MM', 'warning');
                 return;
             }
-            const date_str = date_of(e.started_at);
-            const split_at = build_local_iso(date_str, value);
+            const split_at = resolve_time_after(e.started_at, value);
             if (split_at <= e.started_at || (e.ended_at && split_at >= e.ended_at)) {
                 this.toast('Split time must be within the entry bounds.', 'warning');
                 return;
