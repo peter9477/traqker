@@ -242,6 +242,9 @@
                                 class="btn-icon" title="Split">
                             <i class="fas fa-scissors"></i>
                         </button>
+                        <button @click="onAddBreakBegin(e)" class="btn-icon" title="Add break">
+                            <i class="fas fa-coffee"></i>
+                        </button>
                         <button @click="onDelete(e)" class="btn-icon danger" title="Delete">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -263,8 +266,37 @@
                          v-if="e.breaks && e.breaks.length">
                         <i class="fas fa-coffee"></i>
                         <span v-for="(b, bi) in e.breaks" :key="bi" class="break-chip">
-                            {{ fmt_time(b.started_at) }}–{{ b.ended_at ? fmt_time(b.ended_at) : '…' }}
+                            <span v-if="!(editing && editing.id===e.id && editing.field==='break_start' && editing.break_index===bi)"
+                                  class="clickable" @click="editField(e, 'break_start', bi)">
+                                {{ fmt_time(b.started_at) }}
+                            </span>
+                            <input v-else v-model="editing.value" class="time-input"
+                                   @keydown.enter="saveEdit" @keydown.escape="cancelEdit"
+                                   @blur="saveEdit" placeholder="HH:MM" v-focus>
+                            –
+                            <span v-if="!(editing && editing.id===e.id && editing.field==='break_end' && editing.break_index===bi)"
+                                  class="clickable" @click="b.ended_at && editField(e, 'break_end', bi)">
+                                {{ b.ended_at ? fmt_time(b.ended_at) : '…' }}
+                            </span>
+                            <input v-else v-model="editing.value" class="time-input"
+                                   @keydown.enter="saveEdit" @keydown.escape="cancelEdit"
+                                   @blur="saveEdit" placeholder="HH:MM" v-focus>
+                            <button class="btn-icon break-del" @click="onDeleteBreak(e, bi)"
+                                    title="Delete break">×</button>
                         </span>
+                    </div>
+
+                    <!-- Add-break form -->
+                    <div class="split-form hbox" v-if="adding_break && adding_break.id === e.id">
+                        <span><i class="fas fa-coffee"></i> Break:</span>
+                        <input v-model="adding_break.started_at" class="time-input"
+                               placeholder="HH:MM" v-focus>
+                        <span>–</span>
+                        <input v-model="adding_break.ended_at" class="time-input"
+                               placeholder="HH:MM" @keydown.enter="onAddBreakConfirm(e)"
+                               @keydown.escape="adding_break = null">
+                        <button @click="onAddBreakConfirm(e)">Add</button>
+                        <button @click="adding_break = null">Cancel</button>
                     </div>
                 </div>
             </div>

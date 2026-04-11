@@ -146,6 +146,9 @@ const app = Vue.createApp({
             // Split-entry inline form
             splitting: null,  // {id, value}
 
+            // Add-break inline form
+            adding_break: null,  // {id, started_at, ended_at}
+
             // Privacy
             show_private: false,
 
@@ -541,7 +544,7 @@ const app = Vue.createApp({
         // Inline editing
         // ================================================================
 
-        editField(e, field) {
+        editField(e, field, break_index) {
             this.cancelEdit();
             if (field === 'project') {
                 this.editing = {
@@ -562,6 +565,13 @@ const app = Vue.createApp({
                     date_str: date_of(e.started_at),
                     value: e.ended_at ? fmt_time(e.ended_at) : '',
                 };
+            } else if (field === 'break_start' || field === 'break_end') {
+                const b = e.breaks[break_index];
+                const t = (field === 'break_start') ? b.started_at : b.ended_at;
+                this.editing = {
+                    id: e.id, field, break_index,
+                    value: t ? fmt_time(t) : '',
+                };
             } else {
                 this.editing = { id: e.id, field, value: e[field] || '' };
             }
@@ -569,10 +579,18 @@ const app = Vue.createApp({
 
         saveEdit() {
             if (!this.editing) return;
-            const { id, field, value, date_str } = this.editing;
+            const { id, field, value, date_str, break_index } = this.editing;
             this.editing = null;
 
-            if (field === 'started_at' || field === 'ended_at') {
+            if (field === 'break_start' || field === 'break_end') {
+                if (!value || !value.match(/^\d{1,2}:\d{2}$/)) return;
+                const entry = this.entries.find(x => x.id === id);
+                if (!entry) return;
+                const breaks = entry.breaks.map(b => ({ ...b }));
+                const key = (field === 'break_start') ? 'started_at' : 'ended_at';
+                breaks[break_index][key] = resolve_time_after(entry.started_at, value);
+                this.conn.emit('update_entry', { id, breaks });
+            } else if (field === 'started_at' || field === 'ended_at') {
                 if (!value || !value.match(/^\d{1,2}:\d{2}$/)) return;
                 let iso;
                 if (field === 'ended_at') {
@@ -614,6 +632,39 @@ const app = Vue.createApp({
             const task = this.tasks.find(t => t.id === this.editing.task_id);
             if (task && task.project_id !== null && task.project_id !== this.editing.project_id)
                 this.editing.task_id = null;
+        },
+
+        // ================================================================
+        // Break editing
+        // ================================================================
+
+        onDeleteBreak(e, bi) {
+            const breaks = e.breaks.filter((_, i) => i !== bi);
+            this.conn.emit('update_entry', { id: e.id, breaks });
+        },
+
+        onAddBreakBegin(e) {
+            this.splitting = null;
+            this.adding_break = { id: e.id, started_at: '', ended_at: '' };
+        },
+
+        onAddBreakConfirm(e) {
+            const { started_at, ended_at } = this.adding_break;
+            this.adding_break = null;
+            const rx = /^\d{1,2}:\d{2}$/;
+            if (!started_at.match(rx) || !ended_at.match(rx)) {
+                this.toast('Enter valid break times HH:MM', 'warning');
+                return;
+            }
+            const bs = resolve_time_after(e.started_at, started_at);
+            const be = resolve_time_after(bs, ended_at);
+            if (e.ended_at && (bs >= e.ended_at || be > e.ended_at)) {
+                this.toast('Break must be within the entry bounds.', 'warning');
+                return;
+            }
+            const breaks = [...(e.breaks || []), { started_at: bs, ended_at: be }]
+                .sort((a, b) => a.started_at.localeCompare(b.started_at));
+            this.conn.emit('update_entry', { id: e.id, breaks });
         },
 
         // ================================================================
@@ -785,7 +836,7 @@ const app = Vue.createApp({
 
         onKeydown(e) {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-            if (e.key === 'Escape') { this.cancelEdit(); this.splitting = null; }
+            if (e.key === 'Escape') { this.cancelEdit(); this.splitting = null; this.adding_break = null; }
         },
 
         // ================================================================

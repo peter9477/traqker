@@ -465,10 +465,24 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
 }
 
 .break-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15em;
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: 0.25em;
     padding: 0 0.3em;
+
+    .time-input { width: 3.5em; font-size: 0.9em; }
+
+    .break-del {
+        font-size: 0.8em;
+        padding: 0 0.2em;
+        color: var(--text-muted);
+        opacity: 0;
+        transition: opacity 0.1s;
+    }
+    &:hover .break-del { opacity: 1; }
 }
 
 .badge {
@@ -667,7 +681,7 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
 // ---- Privacy blur ----
 
 .privacy-blur {
-    filter: blur(5px);
+    filter: blur(4px);
     user-select: none;
     transition: filter 0.15s ease;
 }
