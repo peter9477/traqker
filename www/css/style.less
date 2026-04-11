@@ -1,0 +1,649 @@
+@import "const.less";
+
+// Workaround for a Chrome flexbox quirk where flex children with min-width/height
+// 'auto' cause overflow instead of shrinking. Setting 0 fixes this globally.
+* { min-width: 0; min-height: 0; }
+
+html {
+    // Hover/active intensity — override per-project if desired.
+    --hover-contrast:  125%;
+    --active-lighten:  15%;
+}
+
+body {
+    position: absolute;
+    inset: 0;
+    background: var(--bg-page);
+    color: var(--text);
+    font-family: sans-serif;
+    font-size: 1rem;
+}
+
+// ============================================================
+// App layout shell
+
+// Full-screen flex column: header → body (→ optional footer).
+.app-root {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-flow: column nowrap;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+// Top bar
+.app-header {
+    flex: none;
+    box-sizing: border-box;
+    padding: 0.25em 0.6em;
+    background: var(--bg-panel);
+    color: var(--text);
+    border-bottom: 2px solid var(--border);
+    font-size: 1rem;
+    white-space: nowrap;
+
+    a { color: var(--text); text-decoration: none; }
+
+    .app-title   { font-weight: bold; }
+    .app-version { font-size: 80%; opacity: 0.75; margin-left: 0.4em; }
+}
+
+// Scrollable content area between header and optional footer
+.app-body {
+    flex: 1;
+    overflow: auto;
+    box-sizing: border-box;
+    padding: 0.5em;
+}
+
+// Optional footer (uncomment and use if needed)
+// .app-footer {
+//     flex: none;
+//     box-sizing: border-box;
+//     padding: 0.25em 0.6em;
+//     background: var(--bg-panel);
+//     border-top: 2px solid var(--border);
+//     font-size: 0.9rem;
+// }
+
+
+// ============================================================
+// Flex layout helpers
+
+.hbox {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+}
+.vbox {
+    display: flex;
+    flex-flow: column nowrap;
+}
+.hbox > *, .vbox > * { flex: none; }
+
+.push-right { margin-left: auto; }
+.centre     { margin-left: auto; margin-right: auto; }
+
+
+// ============================================================
+// Buttons
+
+button {
+    padding: 0.15em 0.5em;
+    border-radius: 0.3em;
+    border: 1px solid var(--border);
+    background: var(--bg-button);
+    color: var(--text);
+    font-size: 1em;
+    font-weight: bold;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover  { filter: contrast(var(--hover-contrast)); }
+    &:active { background: var(--bg-active); }
+    &:disabled {
+        opacity: 0.45;
+        pointer-events: none;
+    }
+}
+
+.button-bar {
+    display: flex;
+    flex-flow: row nowrap;
+    gap: 0.4em;
+}
+
+
+// ============================================================
+// Semantic color classes
+
+.primary { color: @primary; }
+.success, .good { color: @success; }
+.warning, .warn { color: @warning; }
+.danger,  .bad  { color: @danger; }
+.info           { color: @info; }
+.text-muted     { color: var(--text-muted); }
+
+
+// ============================================================
+// State and visibility utilities
+
+// Dim + block interaction — applied to .app-body when disconnected.
+.disabled { opacity: 0.5; pointer-events: none; }
+
+.hidden   { display: none !important; }
+.required { color: @danger; }
+
+// Fade-out transition helper (set class to trigger, remove to cancel)
+.fade-out {
+    opacity: 0;
+    transition: opacity 0.4s ease-out;
+}
+
+
+// ============================================================
+// Update available banner
+
+.update-banner {
+    flex: none;
+    padding: 0.3em 0.8em;
+    background: @warning;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+
+    &:hover { filter: brightness(90%); }
+}
+
+
+// ============================================================
+// Toast notifications
+
+.toast-container {
+    position: fixed;
+    bottom: 1em;
+    right: 1em;
+    z-index: 1000;
+    display: flex;
+    flex-flow: column-reverse nowrap;   // newest at bottom, stack upward
+    gap: 0.4em;
+    pointer-events: none;               // don't intercept clicks on content below
+}
+
+.toast {
+    pointer-events: auto;
+    padding: 0.5em 0.8em;
+    border-radius: 0.4em;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: white;
+    max-width: 22em;
+    word-break: break-word;
+    opacity: 1;
+    transition: opacity 0.9s ease-out;
+
+    &.fading { opacity: 0; }
+
+    // Colour variants — match semantic colour names
+    &.info    { background: @info; color: var(--text); }
+    &.success { background: @success; }
+    &.warning { background: @warning; }
+    &.danger  { background: @danger; }
+}
+
+
+// ============================================================
+// Dark mode toggle button (in .app-header)
+
+.dark-toggle {
+    background: none;
+    border: none;
+    font-size: 1.1em;
+    opacity: 0.65;
+    padding: 0 0.3em;
+    cursor: pointer;
+
+    &:hover { opacity: 1; filter: none; }
+}
+
+
+// ============================================================
+// Dev-mode layout debugger (#hiliter)
+// Click the corner dot to toggle dashed borders on all elements.
+
+#hiliter {
+    position: fixed;
+    z-index: 9999;
+    top: 2px;
+    left: 2px;
+    width: 8px;
+    height: 8px;
+    border: 2px dotted @danger;
+    opacity: 0.4;
+    cursor: pointer;
+
+    &:hover { opacity: 1; }
+}
+
+body.hilite *:nth-child(odd)  { border: 1px dashed #BC8F8F !important; }
+body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
+
+
+// ============================================================
+// Traqker app styles
+
+.flex-1 { flex: 1; }
+
+// ---- View tabs & nav ----
+
+.view-tabs button, .admin-tabs button {
+    border-radius: 0;
+    border-right-width: 0;
+    &:first-child { border-radius: 0.3em 0 0 0.3em; }
+    &:last-child  { border-radius: 0 0.3em 0.3em 0; border-right-width: 1px; }
+    &.active {
+        background: @primary;
+        color: white;
+        border-color: @primary;
+    }
+}
+
+.nav-date {
+    font-weight: bold;
+    min-width: 12em;
+    text-align: center;
+}
+
+// ---- Running banner ----
+
+.running-banner {
+    flex: none;
+    padding: 0.3em 0.7em;
+    background: lighten(@success, 30%);
+    border-bottom: 1px solid lighten(@success, 15%);
+    gap: 0.5em;
+    font-size: 0.95em;
+
+    html.dark & {
+        background: darken(@success, 20%);
+        border-color: darken(@success, 25%);
+    }
+
+    &.paused {
+        background: lighten(@warning, 30%);
+        border-color: lighten(@warning, 15%);
+        html.dark & { background: darken(@warning, 25%); border-color: darken(@warning, 30%); }
+    }
+
+    .status-dot { font-size: 0.6em; color: @success; }
+    .running-label { font-weight: bold; }
+    .running-proj  { color: @primary; font-weight: bold; }
+    .running-time  { font-weight: bold; font-size: 1.1em; margin-left: auto; }
+}
+
+// ---- Start form ----
+
+.start-form, .start-form-placeholder {
+    display: flex;
+    flex-flow: row wrap;
+    gap: 0.4em;
+    align-items: center;
+    padding: 0.5em 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.5em;
+}
+
+.form-select {
+    padding: 0.15em 0.3em;
+    border: 1px solid var(--border);
+    border-radius: 0.3em;
+    background: var(--bg-input);
+    color: var(--text);
+    font-size: 1em;
+}
+
+.form-desc {
+    flex: 1;
+    min-width: 10em;
+    padding: 0.15em 0.4em;
+    border: 1px solid var(--border);
+    border-radius: 0.3em;
+    background: var(--bg-input);
+    color: var(--text);
+    font-size: 1em;
+}
+
+.form-check {
+    display: flex;
+    align-items: center;
+    gap: 0.25em;
+    font-size: 0.9em;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.btn-start {
+    background: @success;
+    color: white;
+    border-color: darken(@success, 10%);
+    &:hover { filter: brightness(90%); }
+}
+
+// ---- Entry list ----
+
+.entry-list { display: flex; flex-flow: column; gap: 0; }
+
+.entry {
+    display: flex;
+    flex-flow: row wrap;
+    align-items: center;
+    gap: 0.4em;
+    padding: 0.35em 0.4em;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.95em;
+    transition: background 0.1s;
+
+    &:hover { background: var(--bg-panel); }
+
+    &.running {
+        background: lighten(@success, 35%);
+        html.dark & { background: darken(@success, 28%); }
+    }
+    &.paused {
+        background: lighten(@warning, 35%);
+        html.dark & { background: darken(@warning, 28%); }
+    }
+}
+
+.entry-times {
+    display: flex;
+    align-items: center;
+    gap: 0.2em;
+    min-width: 9em;
+    font-variant-numeric: tabular-nums;
+}
+
+.entry-time { white-space: nowrap; }
+
+.time-sep { color: var(--text-muted); }
+
+.time-input {
+    width: 4.5em;
+    padding: 0.1em 0.3em;
+    border: 1px solid @primary;
+    border-radius: 0.25em;
+    background: var(--bg-input);
+    color: var(--text);
+    font-size: 1em;
+    text-align: center;
+}
+
+.entry-dur {
+    font-variant-numeric: tabular-nums;
+    font-weight: bold;
+    min-width: 3.5em;
+    text-align: right;
+    cursor: default;
+}
+
+.entry-proj {
+    min-width: 8em;
+    color: @primary;
+    font-size: 0.9em;
+}
+
+.entry-flags { display: flex; gap: 0.2em; }
+
+.entry-desc {
+    flex: 1;
+    min-width: 5em;
+    color: var(--text);
+}
+
+.desc-input {
+    width: 100%;
+    padding: 0.1em 0.3em;
+    border: 1px solid @primary;
+    border-radius: 0.25em;
+    background: var(--bg-input);
+    color: var(--text);
+    font-size: 1em;
+}
+
+.entry-controls {
+    gap: 0.2em;
+    opacity: 0;
+    transition: opacity 0.1s;
+    .entry:hover & { opacity: 1; }
+}
+
+.btn-icon {
+    padding: 0.1em 0.4em;
+    font-size: 0.85em;
+    &.danger { color: @danger; }
+}
+
+.split-form {
+    width: 100%;
+    gap: 0.4em;
+    padding: 0.3em 0;
+    font-size: 0.9em;
+    background: var(--bg-panel);
+    border-radius: 0.3em;
+    padding: 0.3em 0.5em;
+    margin-top: 0.2em;
+}
+
+.breaks-row {
+    width: 100%;
+    display: flex;
+    flex-flow: row wrap;
+    gap: 0.4em;
+    font-size: 0.82em;
+    padding-left: 0.2em;
+}
+
+.break-chip {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 0.25em;
+    padding: 0 0.3em;
+}
+
+.badge {
+    font-size: 0.75em;
+    font-weight: bold;
+    padding: 0.05em 0.3em;
+    border-radius: 0.2em;
+    border: 1px solid currentColor;
+    &.warn { color: @warning; }
+    &.info { color: @info; }
+}
+
+.clickable {
+    cursor: pointer;
+    border-bottom: 1px dotted transparent;
+    &:hover { border-bottom-color: currentColor; }
+}
+
+.day-footer {
+    padding: 0.5em 0;
+    border-top: 2px solid var(--border);
+    margin-top: 0.5em;
+}
+
+.day-total {
+    gap: 0.5em;
+    font-size: 1em;
+}
+
+.empty-state {
+    padding: 1em 0;
+    font-style: italic;
+}
+
+// ---- Week view ----
+
+.week-view { display: flex; flex-flow: column; height: 100%; }
+
+.week-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 0.3em;
+    overflow: hidden;
+    flex: 1;
+}
+
+.week-day {
+    background: var(--bg-page);
+    min-height: 8em;
+    display: flex;
+    flex-flow: column;
+
+    &.today { background: lighten(@primary, 38%); html.dark & { background: darken(@primary, 25%); } }
+}
+
+.week-day-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.3em 0.4em;
+    background: var(--bg-panel);
+    font-weight: bold;
+    font-size: 0.85em;
+    cursor: pointer;
+    &:hover { filter: contrast(110%); }
+}
+
+.day-name       { }
+.day-total-small { color: @primary; font-variant-numeric: tabular-nums; }
+
+.week-entry {
+    padding: 0.2em 0.4em;
+    font-size: 0.8em;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    &:hover { background: var(--bg-panel); }
+    &.running { background: lighten(@success, 35%); html.dark & { background: darken(@success, 28%); } }
+}
+
+.we-time { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.we-dur  { font-weight: bold; }
+.we-proj { color: @primary; }
+.we-desc { font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.week-footer {
+    padding: 0.4em 0;
+    gap: 0.5em;
+    margin-top: 0.5em;
+}
+
+// ---- Month view ----
+
+.month-view { display: flex; flex-flow: column; }
+
+.month-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 0.3em;
+    overflow: hidden;
+}
+
+.month-dow {
+    background: var(--bg-panel);
+    text-align: center;
+    font-size: 0.82em;
+    font-weight: bold;
+    padding: 0.3em;
+    color: var(--text-muted);
+}
+
+.month-cell {
+    background: var(--bg-page);
+    min-height: 5em;
+    padding: 0.3em;
+    display: flex;
+    flex-flow: column;
+
+    &.today { background: lighten(@primary, 38%); html.dark & { background: darken(@primary, 25%); } }
+    &.other-month { opacity: 0.4; }
+    &.empty { background: var(--bg-panel); }
+    &.clickable:hover { filter: contrast(105%); }
+}
+
+.month-day-num   { font-size: 0.85em; color: var(--text-muted); }
+.month-day-total { font-weight: bold; color: @primary; font-size: 0.9em; }
+
+.month-footer {
+    padding: 0.4em 0;
+    gap: 0.5em;
+    margin-top: 0.5em;
+}
+
+// ---- Admin panel ----
+
+.admin-panel {
+    flex: none;
+    max-height: 40vh;
+    overflow: auto;
+    border-top: 2px solid var(--border);
+    background: var(--bg-panel);
+    display: flex;
+    flex-flow: column;
+}
+
+.admin-header {
+    flex: none;
+    padding: 0.3em 0.5em;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-panel);
+}
+
+.admin-body {
+    overflow: auto;
+    padding: 0.5em;
+}
+
+.admin-form {
+    gap: 0.4em;
+    margin-bottom: 0.6em;
+    flex-wrap: wrap;
+
+    input[type=text], input:not([type]) {
+        padding: 0.15em 0.4em;
+        border: 1px solid var(--border);
+        border-radius: 0.3em;
+        background: var(--bg-input);
+        color: var(--text);
+        font-size: 1em;
+    }
+}
+
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+
+    tr:hover td { background: var(--bg-page); }
+
+    td {
+        padding: 0.2em 0.5em;
+        border-bottom: 1px solid var(--border);
+        vertical-align: middle;
+    }
+}
+
+
+// ============================================================
+// App-specific styles below this line

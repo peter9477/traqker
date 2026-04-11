@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Traqker</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="css/reset.css">
+    <link rel="stylesheet" href="css/all.min.css">
+    <link rel="stylesheet/less" href="css/style.less">
+    <script>less = { errorReporting: 'console' };</script>
+    <script src="js/less.min.js"></script>
+    <style>[v-cloak] { display: none; }</style>
+</head>
+
+<body>
+<div id="vue-root" class="app-root" v-cloak>
+
+    <div v-if="dev" id="hiliter" onclick="document.body.classList.toggle('hilite')"></div>
+
+    <!-- ================================================================
+         Header: title · view tabs · nav · date · admin toggle
+         ================================================================ -->
+    <header class="app-header hbox">
+        <span class="app-title">
+            <i class="fas" :class="connected ? 'fa-clock success' : 'fa-clock-rotate-left danger'"></i>
+            Traqker
+        </span>
+
+        <span v-if="connState === 'connecting'"   class="text-muted">&nbsp;connecting…</span>
+        <i v-if="connState === 'reconnecting'" class="fas fa-link-slash warning" style="margin-left:0.5em" title="Connection lost — retrying…"></i>
+        <span v-if="connState === 'disconnected'" class="danger">
+            &nbsp;<button @click="conn.open()">Reconnect</button>
+        </span>
+
+        <!-- View tabs -->
+        <div class="view-tabs hbox" style="margin-left:1em; gap:0">
+            <button :class="{active: view==='day'}"   @click="switchView('day')">Day</button>
+            <button :class="{active: view==='week'}"  @click="switchView('week')">Week</button>
+            <button :class="{active: view==='month'}" @click="switchView('month')">Month</button>
+        </div>
+
+        <!-- Nav controls -->
+        <div class="nav-controls hbox" style="margin-left:0.8em; gap:0.3em">
+            <button @click="navPrev"><i class="fas fa-chevron-left"></i></button>
+            <button @click="navToday">Today</button>
+            <button @click="navNext"><i class="fas fa-chevron-right"></i></button>
+            <span class="nav-date">{{ navLabel }}</span>
+        </div>
+
+        <div class="push-right hbox" style="gap:0.4em">
+            <span class="text-muted" style="font-size:0.85em">{{ hostname }}</span>
+            <button @click="show_admin = !show_admin" :class="{active: show_admin}" title="Manage entities">
+                <i class="fas fa-cog"></i>
+            </button>
+            <button v-if="dev" @click="reload()" title="Reload (dev)">
+                <i class="fas fa-rotate-right"></i>
+            </button>
+            <button class="dark-toggle" @click="toggleDark" title="Toggle dark mode">
+                <i class="fas fa-circle-half-stroke"></i>
+            </button>
+        </div>
+    </header>
+
+    <div v-if="updateAvailable" class="update-banner" @click="reload()">
+        <i class="fas fa-sync-alt"></i> Update available — click to reload.
+    </div>
+
+    <!-- ================================================================
+         Running-timer banner (all views)
+         ================================================================ -->
+    <div v-if="active_entry" class="running-banner hbox"
+         :class="{paused: is_paused(active_entry)}">
+        <i class="fas status-dot"
+           :class="is_paused(active_entry) ? 'fa-pause' : 'fa-circle'"></i>
+        <span class="running-label">{{ is_paused(active_entry) ? 'Paused' : 'Running' }}</span>
+        <span class="running-proj">{{ entry_label(active_entry) }}</span>
+        <span class="running-desc text-muted" v-if="active_entry.description">
+            — {{ active_entry.description }}
+        </span>
+        <span class="running-time">{{ fmt_duration(entry_net_secs(active_entry)) }}</span>
+        <div class="hbox" style="gap:0.3em; margin-left:0.8em">
+            <button v-if="!is_paused(active_entry)" @click="onPause(active_entry)">
+                <i class="fas fa-pause"></i> Pause
+            </button>
+            <button v-if="is_paused(active_entry)" @click="onResume(active_entry)">
+                <i class="fas fa-play"></i> Resume
+            </button>
+            <button @click="onStop(active_entry)" class="danger">
+                <i class="fas fa-stop"></i> Stop
+            </button>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         Main content
+         ================================================================ -->
+    <main class="app-body" :class="{disabled: !connected}">
+
+        <!-- ---- Day view ---- -->
+        <div v-if="view === 'day'" class="day-view">
+
+            <!-- Start form -->
+            <div class="start-form hbox" v-if="!active_entry">
+                <select v-model="form.project_id" @change="onProjectChange" class="form-select">
+                    <option :value="null">— project —</option>
+                    <option v-for="p in active_projects" :key="p.id" :value="p.id">
+                        {{ client_prefix(p) }}{{ p.name }}
+                    </option>
+                </select>
+                <select v-model="form.task_id" class="form-select">
+                    <option :value="null">— task —</option>
+                    <option v-for="t in form_tasks" :key="t.id" :value="t.id">{{ t.name }}</option>
+                </select>
+                <input v-model="form.description" @keydown.enter="onStart"
+                       class="form-desc" placeholder="Description…">
+                <label class="form-check" title="Billable">
+                    <input type="checkbox" v-model="form.billable"> Bill
+                </label>
+                <label class="form-check" title="Travel">
+                    <input type="checkbox" v-model="form.travel"> Travel
+                </label>
+                <button @click="onStart" class="btn-start">
+                    <i class="fas fa-play"></i> Start
+                </button>
+            </div>
+            <div class="start-form-placeholder" v-else>
+                <span class="text-muted">Stop the running timer to start a new entry.</span>
+            </div>
+
+            <!-- Entry list -->
+            <div class="entry-list" v-if="day_entries.length">
+                <div v-for="e in day_entries" :key="e.id"
+                     class="entry" :class="{running: is_running(e), paused: is_paused(e)}">
+
+                    <!-- Times (click to edit) -->
+                    <div class="entry-times">
+                        <span class="entry-time clickable"
+                              v-if="!(editing && editing.id===e.id && editing.field==='started_at')"
+                              @click="editField(e, 'started_at')">
+                            {{ fmt_time(e.started_at) }}
+                        </span>
+                        <input v-else v-model="editing.value" class="time-input"
+                               @keydown.enter="saveEdit" @keydown.escape="cancelEdit"
+                               @blur="saveEdit" placeholder="HH:MM" v-focus>
+
+                        <span class="time-sep">–</span>
+
+                        <span class="entry-time clickable"
+                              v-if="!(editing && editing.id===e.id && editing.field==='ended_at')"
+                              @click="e.ended_at && editField(e, 'ended_at')">
+                            {{ e.ended_at ? fmt_time(e.ended_at) : '…' }}
+                        </span>
+                        <input v-else v-model="editing.value" class="time-input"
+                               @keydown.enter="saveEdit" @keydown.escape="cancelEdit"
+                               @blur="saveEdit" placeholder="HH:MM" v-focus>
+                    </div>
+
+                    <!-- Net duration (title shows gross) -->
+                    <div class="entry-dur"
+                         :title="'gross ' + fmt_duration(entry_gross_secs(e))">
+                        {{ fmt_duration(entry_net_secs(e)) }}
+                    </div>
+
+                    <!-- Project + task (click to edit) -->
+                    <div class="entry-proj">
+                        <span class="clickable"
+                              v-if="!(editing && editing.id===e.id && editing.field==='project')"
+                              @click="editField(e, 'project')">
+                            {{ entry_label(e) || '—' }}
+                        </span>
+                        <span v-else class="hbox" style="gap:0.3em">
+                            <select v-model="editing.project_id" class="form-select"
+                                    @change="onEditProjectChange">
+                                <option :value="null">— project —</option>
+                                <option v-for="p in active_projects" :key="p.id" :value="p.id">
+                                    {{ p.name }}
+                                </option>
+                            </select>
+                            <select v-model="editing.task_id" class="form-select">
+                                <option :value="null">— task —</option>
+                                <option v-for="t in edit_tasks" :key="t.id" :value="t.id">
+                                    {{ t.name }}
+                                </option>
+                            </select>
+                            <button @click="saveProjectEdit(e)">✓</button>
+                            <button @click="cancelEdit">✕</button>
+                        </span>
+                    </div>
+
+                    <!-- Flags -->
+                    <div class="entry-flags">
+                        <span v-if="!e.billable" class="badge warn" title="Not billable">NB</span>
+                        <span v-if="e.travel"    class="badge info" title="Travel">T</span>
+                    </div>
+
+                    <!-- Description (click to edit) -->
+                    <div class="entry-desc flex-1">
+                        <span class="clickable"
+                              v-if="!(editing && editing.id===e.id && editing.field==='description')"
+                              @click="editField(e, 'description')">
+                            {{ e.description || '—' }}
+                        </span>
+                        <input v-else v-model="editing.value" class="desc-input"
+                               @keydown.enter="saveEdit" @keydown.escape="cancelEdit"
+                               @blur="saveEdit" v-focus>
+                    </div>
+
+                    <!-- Controls -->
+                    <div class="entry-controls hbox">
+                        <button v-if="!is_running(e)" @click="onSplitBegin(e)"
+                                class="btn-icon" title="Split">
+                            <i class="fas fa-scissors"></i>
+                        </button>
+                        <button @click="onDelete(e)" class="btn-icon danger" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+
+                    <!-- Split form -->
+                    <div class="split-form hbox" v-if="splitting && splitting.id === e.id">
+                        <span>Split at:</span>
+                        <input v-model="splitting.value" class="time-input"
+                               @keydown.enter="onSplitConfirm(e)"
+                               @keydown.escape="splitting = null"
+                               placeholder="HH:MM" v-focus>
+                        <button @click="onSplitConfirm(e)">Split</button>
+                        <button @click="splitting = null">Cancel</button>
+                    </div>
+
+                    <!-- Breaks row -->
+                    <div class="breaks-row text-muted"
+                         v-if="e.breaks && e.breaks.length">
+                        <i class="fas fa-coffee"></i>
+                        <span v-for="(b, bi) in e.breaks" :key="bi" class="break-chip">
+                            {{ fmt_time(b.started_at) }}–{{ b.ended_at ? fmt_time(b.ended_at) : '…' }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div v-else class="empty-state text-muted">No entries for this day.</div>
+
+            <!-- Day totals + export -->
+            <div class="day-footer">
+                <div class="day-total hbox" v-if="day_entries.length">
+                    <span>Total:</span>
+                    <strong>{{ fmt_duration(day_total_secs) }}</strong>
+                    <span class="text-muted" v-if="day_billable_secs !== day_total_secs">
+                        ({{ fmt_duration(day_billable_secs) }} billable)
+                    </span>
+                </div>
+                <div class="hbox" style="margin-top:0.5em">
+                    <button @click="onExportDay">
+                        <i class="fas fa-download"></i> Export CSV for this day
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ---- Week view ---- -->
+        <div v-if="view === 'week'" class="week-view">
+            <div class="week-grid">
+                <div v-for="day in week_days" :key="day.date"
+                     class="week-day" :class="{today: day.date === today}">
+                    <div class="week-day-header" @click="goToDay(day.date)">
+                        <span class="day-name">{{ day.label }}</span>
+                        <span class="day-total-small">
+                            {{ day_secs(day.date) ? fmt_duration(day_secs(day.date)) : '' }}
+                        </span>
+                    </div>
+                    <div v-for="e in entries_for_day(day.date)" :key="e.id"
+                         class="week-entry" :class="{running: is_running(e)}"
+                         @click="goToDay(day.date)" title="Click to go to day view">
+                        <div class="we-time">{{ fmt_time(e.started_at) }}</div>
+                        <div class="we-dur">{{ fmt_duration(entry_net_secs(e)) }}</div>
+                        <div class="we-proj">{{ entry_label(e) || '—' }}</div>
+                        <div class="we-desc text-muted">{{ e.description }}</div>
+                    </div>
+                    <div v-if="!entries_for_day(day.date).length"
+                         class="text-muted" style="font-size:0.8em; padding:0.3em 0">—</div>
+                </div>
+            </div>
+            <div class="week-footer hbox">
+                <span>Week total: <strong>{{ fmt_duration(week_total_secs) }}</strong></span>
+                <button @click="onExportWeek" style="margin-left:1em">
+                    <i class="fas fa-download"></i> Export CSV
+                </button>
+            </div>
+        </div>
+
+        <!-- ---- Month view ---- -->
+        <div v-if="view === 'month'" class="month-view">
+            <div class="month-grid">
+                <div class="month-dow" v-for="d in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']"
+                     :key="d">{{ d }}</div>
+                <template v-for="(week, wi) in month_weeks" :key="wi">
+                    <div v-for="(day, di) in week" :key="di"
+                         class="month-cell"
+                         :class="{
+                             'other-month': day && day.date.slice(0,7) !== current_month,
+                             today: day && day.date === today,
+                             empty: !day,
+                             clickable: !!day
+                         }"
+                         @click="day && goToDay(day.date)">
+                        <template v-if="day">
+                            <span class="month-day-num">{{ day.dom }}</span>
+                            <span class="month-day-total" v-if="day_secs(day.date)">
+                                {{ fmt_duration(day_secs(day.date)) }}
+                            </span>
+                        </template>
+                    </div>
+                </template>
+            </div>
+            <div class="month-footer hbox">
+                <span>Month total: <strong>{{ fmt_duration(month_total_secs) }}</strong></span>
+                <button @click="onExportMonth" style="margin-left:1em">
+                    <i class="fas fa-download"></i> Export CSV
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ================================================================
+         Admin panel
+         ================================================================ -->
+    <div v-if="show_admin" class="admin-panel">
+        <div class="admin-header hbox">
+            <div class="admin-tabs hbox" style="gap:0">
+                <button :class="{active: admin_tab==='clients'}"  @click="admin_tab='clients'">Clients</button>
+                <button :class="{active: admin_tab==='projects'}" @click="admin_tab='projects'">Projects</button>
+                <button :class="{active: admin_tab==='tasks'}"    @click="admin_tab='tasks'">Tasks</button>
+            </div>
+            <button @click="show_admin=false" class="push-right btn-icon">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Clients tab -->
+        <div v-if="admin_tab === 'clients'" class="admin-body">
+            <form class="admin-form hbox" @submit.prevent="onCreateClient">
+                <input v-model="admin_form.name" placeholder="Client name" required class="flex-1">
+                <input v-model="admin_form.notes" placeholder="Notes" class="flex-1">
+                <button type="submit">Add</button>
+            </form>
+            <table class="admin-table">
+                <tr v-for="c in clients" :key="c.id">
+                    <td>{{ c.name }}</td>
+                    <td class="text-muted">{{ c.notes }}</td>
+                    <td><button @click="onDeleteClient(c)" class="btn-icon danger">✕</button></td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Projects tab -->
+        <div v-if="admin_tab === 'projects'" class="admin-body">
+            <form class="admin-form hbox" @submit.prevent="onCreateProject">
+                <input v-model="admin_form.name" placeholder="Project name" required class="flex-1">
+                <input v-model="admin_form.code" placeholder="Code (e.g. p313)" style="width:7em">
+                <select v-model="admin_form.client_id">
+                    <option :value="null">— client —</option>
+                    <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                </select>
+                <label><input type="checkbox" v-model="admin_form.billable_default" checked> Billable</label>
+                <button type="submit">Add</button>
+            </form>
+            <table class="admin-table">
+                <tr v-for="p in projects" :key="p.id">
+                    <td>{{ p.name }}</td>
+                    <td class="text-muted">{{ p.code }}</td>
+                    <td class="text-muted">{{ client_name(p.client_id) }}</td>
+                    <td><span v-if="!p.billable_default" class="badge warn">NB</span></td>
+                    <td><button @click="onDeleteProject(p)" class="btn-icon danger">✕</button></td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Tasks tab -->
+        <div v-if="admin_tab === 'tasks'" class="admin-body">
+            <form class="admin-form hbox" @submit.prevent="onCreateTask">
+                <input v-model="admin_form.name" placeholder="Task name" required class="flex-1">
+                <select v-model="admin_form.project_id">
+                    <option :value="null">— project (optional) —</option>
+                    <option v-for="p in active_projects" :key="p.id" :value="p.id">{{ p.name }}</option>
+                </select>
+                <button type="submit">Add</button>
+            </form>
+            <table class="admin-table">
+                <tr v-for="t in tasks" :key="t.id">
+                    <td>{{ t.name }}</td>
+                    <td class="text-muted">{{ project_name(t.project_id) }}</td>
+                    <td><button @click="onDeleteTask(t)" class="btn-icon danger">✕</button></td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- Toasts -->
+    <div class="toast-container">
+        <div v-for="t in toasts" :key="t.id" class="toast" :class="[t.level, {fading: t.fading}]">
+            {{ t.message }}
+        </div>
+    </div>
+
+</div><!-- #vue-root -->
+
+<script src="js/vue.global.prod.js"></script>
+<script type="module" src="index.js"></script>
+</body>
+</html>

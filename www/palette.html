@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Palette Designer</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="css/reset.css">
+    <link rel="stylesheet" href="css/all.min.css">
+    <style>
+        /* Tool chrome — independent of the template palette */
+        * { box-sizing: border-box; min-width: 0; }
+
+        body {
+            font-family: sans-serif;
+            font-size: 0.9rem;
+            background: #161b22;
+            color: #c9d1d9;
+            margin: 0;
+            padding: 1em 1.2em;
+            min-height: 100vh;
+        }
+
+        h1 {
+            font-size: 1em;
+            font-weight: normal;
+            opacity: 0.55;
+            margin: 0 0 0.9em;
+        }
+
+        .tool-layout {
+            display: flex;
+            flex-flow: row nowrap;
+            gap: 1.4em;
+            align-items: flex-start;
+        }
+
+        /* ---- Controls ---- */
+        .controls {
+            flex: none;
+            width: 270px;
+            display: flex;
+            flex-flow: column nowrap;
+            gap: 0.8em;
+        }
+
+        .slider-group {
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 0.5em;
+            padding: 0.75em 0.85em;
+        }
+
+        .slider-group h2 {
+            font-size: 0.72em;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #8b949e;
+            margin: 0 0 0.5em;
+            font-weight: bold;
+        }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+            margin-bottom: 0.35em;
+        }
+        .slider-row:last-child { margin-bottom: 0; }
+
+        .slider-row label {
+            flex: none;
+            width: 5em;
+            font-size: 0.82em;
+            color: #8b949e;
+        }
+
+        .slider-row input[type=range] {
+            flex: 1;
+            cursor: pointer;
+            accent-color: #58a6ff;
+        }
+
+        .slider-row .val {
+            flex: none;
+            width: 2.8em;
+            text-align: right;
+            font-size: 0.82em;
+            font-variant-numeric: tabular-nums;
+            color: #e6edf3;
+        }
+
+        /* Rainbow gradient on hue slider track */
+        #hue-slider {
+            background: linear-gradient(to right,
+                hsl(0,75%,55%), hsl(60,75%,55%), hsl(120,75%,55%),
+                hsl(180,75%,55%), hsl(240,75%,55%), hsl(300,75%,55%), hsl(360,75%,55%));
+            border-radius: 3px;
+            height: 8px;
+            appearance: none;
+            -webkit-appearance: none;
+            outline: none;
+            cursor: pointer;
+        }
+        #hue-slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 16px; height: 16px;
+            border-radius: 50%;
+            background: white;
+            border: 2px solid rgba(0,0,0,0.45);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+            cursor: pointer;
+        }
+        #hue-slider::-moz-range-thumb {
+            width: 14px; height: 14px;
+            border-radius: 50%;
+            background: white;
+            border: 2px solid rgba(0,0,0,0.45);
+            cursor: pointer;
+        }
+
+        /* Output */
+        .output-box {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 0.5em;
+            padding: 0.75em 0.85em;
+        }
+
+        .output-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.5em;
+        }
+
+        .output-header h2 {
+            font-size: 0.72em;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #8b949e;
+            margin: 0;
+            font-weight: bold;
+        }
+
+        .copy-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            border-radius: 0.3em;
+            padding: 0.1em 0.5em;
+            font-size: 0.78em;
+            cursor: pointer;
+        }
+        .copy-btn:hover { background: #30363d; }
+
+        .output-box pre {
+            margin: 0;
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            font-size: 0.82em;
+            color: #7ee787;
+            line-height: 1.65;
+        }
+
+        .output-hint {
+            margin-top: 0.5em;
+            font-size: 0.75em;
+            color: #8b949e;
+        }
+
+        /* ---- Previews ---- */
+        .previews {
+            flex: 1;
+            display: flex;
+            flex-flow: column nowrap;
+            gap: 1.2em;
+        }
+
+        .preview-wrap { }
+
+        .preview-label {
+            font-size: 0.72em;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #8b949e;
+            margin-bottom: 0.3em;
+        }
+
+        .preview {
+            border-radius: 0.5em;
+            overflow: hidden;
+            box-shadow: 0 3px 14px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+
+        /* ---- Mini UI (palette preview components) ---- */
+        /* All colours come from CSS vars set by JS on each preview container. */
+
+        .ui-frame {
+            background: var(--bg-page);
+            color: var(--text);
+            font-family: sans-serif;
+            font-size: 0.88rem;
+        }
+
+        .ui-header {
+            background: var(--bg-panel);
+            border-bottom: 2px solid var(--border);
+            padding: 0.3em 0.7em;
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+            white-space: nowrap;
+        }
+        .ui-title { font-weight: bold; }
+        .ui-push   { margin-left: auto; display: flex; gap: 0.4em; align-items: center; }
+
+        .ui-body {
+            padding: 0.75em 0.9em;
+            display: flex;
+            flex-flow: column nowrap;
+            gap: 0.65em;
+        }
+
+        .ui-banner {
+            flex: none;
+            padding: 0.25em 0.7em;
+            background: var(--warning);
+            color: white;
+            font-weight: bold;
+            font-size: 0.82em;
+            display: flex;
+            align-items: center;
+            gap: 0.4em;
+        }
+
+        .ui-btn {
+            padding: 0.15em 0.55em;
+            border-radius: 0.3em;
+            border: 1px solid var(--border);
+            background: var(--bg-button);
+            color: var(--text);
+            font-size: 0.88em;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .ui-btn.active { background: var(--bg-active); }
+        .ui-btn.primary { background: var(--primary); border-color: var(--primary); color: white; }
+        .ui-btn.dim     { opacity: 0.45; }
+
+        .ui-input {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.15em 0.4em;
+            border-radius: 0.25em;
+            font-size: 0.88em;
+            width: 9em;
+        }
+
+        .ui-panel {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 0.3em;
+            padding: 0.35em 0.6em;
+            font-size: 0.85em;
+        }
+
+        .row { display: flex; flex-flow: row wrap; gap: 0.4em; align-items: center; }
+
+        .ui-muted  { color: var(--text-muted); }
+        .ui-primary { color: var(--primary); }
+        .ui-success { color: var(--success); }
+        .ui-warning { color: var(--warning); }
+        .ui-danger  { color: var(--danger); }
+        .ui-info    { color: var(--info); }
+
+        .ui-toast {
+            padding: 0.3em 0.65em;
+            border-radius: 0.35em;
+            font-size: 0.82em;
+            font-weight: bold;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+<h1><i class="fas fa-palette"></i>&ensp;Palette Designer &mdash; wysiweb template</h1>
+
+<div class="tool-layout">
+
+    <div class="controls">
+
+        <div class="slider-group">
+            <h2>Brand hue</h2>
+            <div class="slider-row" style="gap:0.6em">
+                <input type="range" id="hue-slider" min="0" max="360" value="0" style="flex:1">
+                <span class="val" id="hue-val">0</span>
+            </div>
+        </div>
+
+        <div class="slider-group">
+            <h2>@primary &mdash; actions, links</h2>
+            <div class="slider-row">
+                <label>Saturation</label>
+                <input type="range" id="psat-slider" min="10" max="90" value="55">
+                <span class="val" id="psat-val">55%</span>
+            </div>
+            <div class="slider-row">
+                <label>Lightness</label>
+                <input type="range" id="pl-slider" min="20" max="70" value="45">
+                <span class="val" id="pl-val">45%</span>
+            </div>
+        </div>
+
+        <div class="slider-group">
+            <h2>@neutral &mdash; grays, backgrounds</h2>
+            <div class="slider-row">
+                <label>Saturation</label>
+                <input type="range" id="nsat-slider" min="0" max="50" value="25">
+                <span class="val" id="nsat-val">25%</span>
+            </div>
+            <div class="slider-row">
+                <label>Lightness</label>
+                <input type="range" id="nl-slider" min="25" max="55" value="40">
+                <span class="val" id="nl-val">40%</span>
+            </div>
+        </div>
+
+        <div class="output-box">
+            <div class="output-header">
+                <h2>const.less — seed variables</h2>
+                <button class="copy-btn" id="copy-btn" onclick="copyOutput()">Copy</button>
+            </div>
+            <pre id="output"></pre>
+            <div class="output-hint">Paste over the seed block in <code>css/const.less</code></div>
+        </div>
+
+    </div>
+
+    <div class="previews">
+        <div class="preview-wrap">
+            <div class="preview-label">Light mode</div>
+            <div class="preview" id="preview-light"></div>
+        </div>
+        <div class="preview-wrap">
+            <div class="preview-label">Dark mode</div>
+            <div class="preview" id="preview-dark"></div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+'use strict';
+
+const sliders = [
+    { id: 'hue',  el: null, valEl: null, suffix: ''  },
+    { id: 'psat', el: null, valEl: null, suffix: '%' },
+    { id: 'pl',   el: null, valEl: null, suffix: '%' },
+    { id: 'nsat', el: null, valEl: null, suffix: '%' },
+    { id: 'nl',   el: null, valEl: null, suffix: '%' },
+];
+for (const s of sliders) {
+    s.el    = document.getElementById(s.id + '-slider');
+    s.valEl = document.getElementById(s.id + '-val');
+    s.el.addEventListener('input', render);
+}
+
+function get(id) { return +document.getElementById(id + '-slider').value; }
+function clamp(v, lo=0, hi=100) { return Math.max(lo, Math.min(hi, v)); }
+function hsl(h, s, l) {
+    return `hsl(${Math.round(h)}, ${clamp(Math.round(s))}%, ${clamp(Math.round(l))}%)`;
+}
+
+function palette() {
+    const hue  = get('hue');
+    const pSat = get('psat'),  pL  = get('pl');
+    const nSat = get('nsat'),  nL  = get('nl');
+
+    const primary = hsl(hue, pSat, pL);
+    const info    = hsl(hue, pSat - 15, pL + 10);
+    const success = 'hsl(120, 40%, 45%)';
+    const danger  = 'hsl(  0, 55%, 50%)';
+    const warning = 'hsl( 35, 75%, 50%)';
+
+    const light = {
+        '--primary':    primary,
+        '--info':       info,
+        '--success':    success,
+        '--danger':     danger,
+        '--warning':    warning,
+        '--bg-page':    hsl(hue, nSat, nL + 40),
+        '--bg-panel':   hsl(hue, nSat, nL + 32),
+        '--bg-input':   hsl(hue, nSat, nL + 45),
+        '--bg-button':  hsl(hue, nSat, nL + 38),
+        '--bg-active':  hsl(hue, pSat, pL + 30),
+        '--text':       hsl(hue, nSat, nL - 25),
+        '--text-muted': hsl(hue, nSat, nL +  5),
+        '--border':     hsl(hue, nSat, nL + 20),
+    };
+    const dark = Object.assign({}, light, {
+        '--bg-page':    hsl(hue, nSat, nL - 28),
+        '--bg-panel':   hsl(hue, nSat, nL - 22),
+        '--bg-input':   hsl(hue, nSat, nL - 25),
+        '--bg-button':  hsl(hue, nSat, nL - 18),
+        '--bg-active':  hsl(hue, pSat, pL - 10),
+        '--text':       hsl(hue, nSat, nL + 38),
+        '--text-muted': hsl(hue, nSat, nL + 18),
+        '--border':     hsl(hue, nSat, nL -  8),
+    });
+
+    return { hue, pSat, pL, nSat, nL, light, dark };
+}
+
+function previewHTML() {
+    return `<div class="ui-frame">
+  <div class="ui-header">
+    <i class="fas fa-thumbs-up ui-success"></i>
+    <span class="ui-title">MyApp</span>
+    <span class="ui-muted" style="font-size:0.8em">&nbsp;v1.0</span>
+    <div class="ui-push">
+      <span class="ui-muted" style="font-size:0.8em">hostname</span>
+      <span class="ui-btn" style="background:none;border:none;opacity:0.6;padding:0 0.2em">
+        <i class="fas fa-circle-half-stroke"></i>
+      </span>
+    </div>
+  </div>
+  <div class="ui-banner">
+    <i class="fas fa-sync-alt"></i> Update available &mdash; click to reload.
+  </div>
+  <div class="ui-body">
+    <div class="row">
+      <span class="ui-btn">Default</span>
+      <span class="ui-btn primary">Primary</span>
+      <span class="ui-btn active">Active</span>
+      <span class="ui-btn dim">Disabled</span>
+      <input class="ui-input" value="Text input" readonly>
+    </div>
+    <div class="row" style="font-size:0.88em; gap:0.8em">
+      <span class="ui-primary"><i class="fas fa-circle"></i> primary</span>
+      <span class="ui-success"><i class="fas fa-circle"></i> success</span>
+      <span class="ui-warning"><i class="fas fa-circle"></i> warning</span>
+      <span class="ui-danger"><i class="fas fa-circle"></i> danger</span>
+      <span class="ui-info"><i class="fas fa-circle"></i> info</span>
+      <span class="ui-muted"><i class="fas fa-circle"></i> muted</span>
+    </div>
+    <div class="ui-panel">
+      Panel &mdash; <span class="ui-muted">secondary text, borders, inputs</span>
+    </div>
+    <div class="row">
+      <span class="ui-toast" style="background:var(--info);color:var(--text)">Info</span>
+      <span class="ui-toast" style="background:var(--success)">Success</span>
+      <span class="ui-toast" style="background:var(--warning)">Warning</span>
+      <span class="ui-toast" style="background:var(--danger)">Danger</span>
+    </div>
+  </div>
+</div>`;
+}
+
+function applyVars(el, vars) {
+    for (const [k, v] of Object.entries(vars))
+        el.style.setProperty(k, v);
+}
+
+const lightEl = document.getElementById('preview-light');
+const darkEl  = document.getElementById('preview-dark');
+lightEl.innerHTML = darkEl.innerHTML = previewHTML();
+
+function render() {
+    // Update value labels
+    for (const s of sliders)
+        s.valEl.textContent = s.el.value + s.suffix;
+
+    const p = palette();
+    applyVars(lightEl, p.light);
+    applyVars(darkEl,  p.dark);
+
+    // Align numbers — pad hue to 3 chars, sat/lightness to 2
+    const h  = String(p.hue).padStart(3, ' ');
+    const ps = String(p.pSat).padStart(2, ' ');
+    const pl = String(p.pL).padStart(2, ' ');
+    const ns = String(p.nSat).padStart(2, ' ');
+    const nl = String(p.nL).padStart(2, ' ');
+
+    document.getElementById('output').textContent =
+`@hue:     ${h};
+@primary: hsl(@hue, ${ps}%, ${pl}%);
+@neutral: hsl(@hue, ${ns}%, ${nl}%);
+@success: hsl(120, 40%, 45%);
+@danger:  hsl(  0, 55%, 50%);`;
+}
+
+function copyOutput() {
+    navigator.clipboard.writeText(document.getElementById('output').textContent)
+        .then(() => {
+            const btn = document.getElementById('copy-btn');
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy', 1500);
+        });
+}
+
+async function loadFromLess() {
+    try {
+        const text = await fetch('css/const.less', { cache: 'reload' }).then(r => r.text());
+        const num  = (re) => { const m = text.match(re); return m ? +m[1] : null; };
+
+        const hue  = num(/@hue\s*:\s*(\d+)/);
+        const pSat = num(/@primary\s*:\s*hsl\([^,]+,\s*(\d+)%/);
+        const pL   = num(/@primary\s*:\s*hsl\([^,]+,\s*\d+%\s*,\s*(\d+)%/);
+        const nSat = num(/@neutral\s*:\s*hsl\([^,]+,\s*(\d+)%/);
+        const nL   = num(/@neutral\s*:\s*hsl\([^,]+,\s*\d+%\s*,\s*(\d+)%/);
+
+        if (hue  != null) { document.getElementById('hue-slider').value  = hue;  }
+        if (pSat != null) { document.getElementById('psat-slider').value = pSat; }
+        if (pL   != null) { document.getElementById('pl-slider').value   = pL;   }
+        if (nSat != null) { document.getElementById('nsat-slider').value = nSat; }
+        if (nL   != null) { document.getElementById('nl-slider').value   = nL;   }
+    } catch { /* leave defaults in place */ }
+    render();
+}
+
+loadFromLess();
+</script>
+
+</body>
+</html>
