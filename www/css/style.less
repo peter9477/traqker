@@ -334,6 +334,13 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
     &:hover { filter: brightness(90%); }
 }
 
+.btn-add {
+    background: @primary;
+    color: white;
+    border-color: darken(@primary, 10%);
+    &:hover { filter: brightness(90%); }
+}
+
 // ---- Entry list ----
 
 .entry-list { display: flex; flex-flow: column; gap: 0; }
@@ -381,6 +388,15 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
     color: var(--text);
     font-size: 1em;
     text-align: center;
+}
+
+.date-input {
+    padding: 0.1em 0.3em;
+    border: 1px solid @primary;
+    border-radius: 0.25em;
+    background: var(--bg-input);
+    color: var(--text);
+    font-size: 1em;
 }
 
 .entry-dur {

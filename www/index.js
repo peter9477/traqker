@@ -134,6 +134,10 @@ const app = Vue.createApp({
                 description: '',
                 billable:    true,
                 travel:      false,
+                // Manual entry (explicit start/end times)
+                manual_open: false,
+                start_time:  '',
+                end_time:    '',
             },
 
             // Inline field editing
@@ -471,6 +475,31 @@ const app = Vue.createApp({
                 billable:    this.form.billable ? 1 : 0,
                 travel:      this.form.travel   ? 1 : 0,
             });
+            this.form.description = '';
+        },
+
+        onAdd() {
+            const { start_time, end_time } = this.form;
+            if (!start_time || !start_time.match(/^\d{1,2}:\d{2}$/)) {
+                this.toast('Enter a valid start time HH:MM', 'warning');
+                return;
+            }
+            const started_at = build_local_iso(this.current_date, start_time);
+            const ended_at = (end_time && end_time.match(/^\d{1,2}:\d{2}$/))
+                ? resolve_time_after(started_at, end_time)
+                : null;
+            this.conn.emit('create_entry', {
+                started_at,
+                ended_at,
+                project_id:  this.form.project_id,
+                task_id:     this.form.task_id,
+                description: this.form.description,
+                billable:    this.form.billable ? 1 : 0,
+                travel:      this.form.travel   ? 1 : 0,
+            });
+            this.form.start_time  = '';
+            this.form.end_time    = '';
+            this.form.manual_open = false;
             this.form.description = '';
         },
 

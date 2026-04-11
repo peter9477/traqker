@@ -152,6 +152,30 @@ class Client:
         )
         await Client.broadcast(_t='entry_update', entry=entry)
 
+    async def _msg_create_entry(self, msg):
+        """Create an entry with explicit started_at (and optional ended_at)."""
+        person = await self.db.get_person()
+        project_id = msg.get('project_id')
+        billable = msg.get('billable')
+        if billable is None and project_id:
+            projects = await self.db.get_projects()
+            proj = next((p for p in projects if p['id'] == project_id), None)
+            billable = proj['billable_default'] if proj else 1
+        if billable is None:
+            billable = 1
+        entry = await self.db.create_entry(
+            person_id=person['id'],
+            started_at=msg['started_at'],
+            ended_at=msg.get('ended_at'),
+            client_id=msg.get('client_id'),
+            project_id=project_id,
+            task_id=msg.get('task_id'),
+            billable=int(billable),
+            travel=int(msg.get('travel', 0)),
+            description=msg.get('description', ''),
+        )
+        await Client.broadcast(_t='entry_update', entry=entry)
+
     async def _msg_stop_entry(self, msg):
         id = int(msg['id'])
         entry = await self.db.get_entry(id)

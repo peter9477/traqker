@@ -112,7 +112,8 @@
                     <option :value="null">— task —</option>
                     <option v-for="t in form_tasks" :key="t.id" :value="t.id">{{ t.name }}</option>
                 </select>
-                <input v-model="form.description" @keydown.enter="onStart"
+                <input v-model="form.description"
+                       @keydown.enter="current_date === today ? onStart() : onAdd()"
                        class="form-desc" placeholder="Description…">
                 <label class="form-check" title="Billable">
                     <input type="checkbox" v-model="form.billable"> Bill
@@ -120,8 +121,29 @@
                 <label class="form-check" title="Travel">
                     <input type="checkbox" v-model="form.travel"> Travel
                 </label>
-                <button @click="onStart" class="btn-start">
+                <!-- Live timer: only when viewing today -->
+                <button v-if="current_date === today" @click="onStart" class="btn-start">
                     <i class="fas fa-play"></i> Start
+                </button>
+                <!-- Manual entry: always on past days, toggled on today -->
+                <template v-if="current_date !== today || form.manual_open">
+                    <input v-model="form.start_time" class="time-input" placeholder="HH:MM"
+                           @keydown.enter="onAdd" v-focus>
+                    <span class="time-sep">–</span>
+                    <input v-model="form.end_time" class="time-input" placeholder="HH:MM"
+                           @keydown.enter="onAdd">
+                    <button @click="onAdd" class="btn-add">
+                        <i class="fas fa-plus"></i> Add
+                    </button>
+                    <button v-if="current_date === today"
+                            @click="form.manual_open = false; form.start_time = ''; form.end_time = ''"
+                            class="btn-icon" title="Cancel manual entry">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </template>
+                <button v-if="current_date === today && !form.manual_open"
+                        @click="form.manual_open = true" class="btn-icon" title="Add manual entry">
+                    <i class="fas fa-plus"></i>
                 </button>
             </div>
             <div class="start-form-placeholder" v-else>
@@ -140,9 +162,13 @@
                               @click="editField(e, 'started_at')">
                             {{ fmt_time(e.started_at) }}
                         </span>
-                        <input v-else v-model="editing.value" class="time-input"
-                               @keydown.enter="saveEdit" @keydown.escape="cancelEdit"
-                               @blur="saveEdit" placeholder="HH:MM" v-focus>
+                        <span v-else class="hbox" style="gap:0.2em">
+                            <input v-model="editing.date_str" type="date" class="date-input"
+                                   @keydown.enter="saveEdit" @keydown.escape="cancelEdit">
+                            <input v-model="editing.value" class="time-input"
+                                   @keydown.enter="saveEdit" @keydown.escape="cancelEdit"
+                                   @blur="saveEdit" placeholder="HH:MM" v-focus>
+                        </span>
 
                         <span class="time-sep">–</span>
 
