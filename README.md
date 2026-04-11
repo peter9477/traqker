@@ -1,2 +1,3 @@
-# monica
-Computer monitoring system
+# Traqker
+
+Time tracking system.
