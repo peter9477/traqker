@@ -83,7 +83,7 @@
               :class="{'privacy-blur': is_private_entry(ae) && !show_private}">
             — {{ ae.description }}
         </span>
-        <span class="running-time">{{ fmt_duration(entry_net_secs(ae)) }}</span>
+        <live-secs :entry="ae" class="running-time"></live-secs>
         <div class="hbox" style="gap:0.3em; margin-left:0.8em">
             <button v-if="!is_paused(ae)" @click="onPause(ae)">
                 <i class="fas fa-pause"></i> Pause
@@ -185,10 +185,10 @@
                                @blur="saveEdit" placeholder="HH:MM" v-focus>
                     </div>
 
-                    <!-- Net duration (title shows gross) -->
-                    <div class="entry-dur"
-                         :title="'gross ' + fmt_duration(entry_gross_secs(e))">
-                        {{ fmt_duration(entry_net_secs(e)) }}
+                    <!-- Net duration (title shows gross for finished entries) -->
+                    <div class="entry-dur">
+                        <live-secs v-if="is_running(e)" :entry="e"></live-secs>
+                        <span v-else :title="'gross ' + fmt_duration(entry_gross_secs(e))">{{ fmt_duration(entry_net_secs(e)) }}</span>
                     </div>
 
                     <!-- Project + task (click to edit) -->
@@ -311,14 +311,14 @@
             <div class="day-footer">
                 <div class="day-total hbox" v-if="day_entries.length">
                     <span>Total:</span>
-                    <strong>{{ fmt_duration(day_total_secs) }}</strong>
-                    <span class="text-muted" v-if="day_billable_secs !== day_total_secs">
-                        ({{ fmt_duration(day_billable_secs) }} billable)
+                    <strong><live-total :entries="day_entries"></live-total></strong>
+                    <span class="text-muted" v-if="billable_day_entries.length < day_entries.length">
+                        (<live-total :entries="billable_day_entries"></live-total> billable)
                     </span>
                 </div>
                 <div class="hbox" style="margin-top:0.5em">
                     <button @click="onExportDay">
-                        <i class="fas fa-download"></i> Export CSV for this day
+                        <i class="fas fa-download"></i> Export CSV (this day)
                     </button>
                 </div>
             </div>
@@ -332,14 +332,17 @@
                     <div class="week-day-header" @click="goToDay(day.date)">
                         <span class="day-name">{{ day.label }}</span>
                         <span class="day-total-small">
-                            {{ day_secs(day.date) ? fmt_duration(day_secs(day.date)) : '' }}
+                            <live-total :entries="entries_for_day(day.date)" :hide-zero="true"></live-total>
                         </span>
                     </div>
                     <div v-for="e in entries_for_day(day.date)" :key="e.id"
                          class="week-entry" :class="{running: is_running(e)}"
                          @click="goToDay(day.date)" title="Click to go to day view">
                         <div class="we-time">{{ fmt_time(e.started_at) }}</div>
-                        <div class="we-dur">{{ fmt_duration(entry_net_secs(e)) }}</div>
+                        <div class="we-dur">
+                            <live-secs v-if="is_running(e)" :entry="e"></live-secs>
+                            <template v-else>{{ fmt_duration(entry_net_secs(e)) }}</template>
+                        </div>
                         <div class="we-proj">{{ entry_label(e) || '—' }}</div>
                         <div class="we-desc text-muted"
                              :class="{'privacy-blur': is_private_entry(e) && !show_private}">{{ e.description }}</div>
@@ -349,9 +352,9 @@
                 </div>
             </div>
             <div class="week-footer hbox">
-                <span>Week total: <strong>{{ fmt_duration(week_total_secs) }}</strong></span>
+                <span>Week total: <strong><live-total :entries="week_entries"></live-total></strong></span>
                 <button @click="onExportWeek" style="margin-left:1em">
-                    <i class="fas fa-download"></i> Export CSV
+                    <i class="fas fa-download"></i> Export CSV (this week)
                 </button>
             </div>
         </div>
@@ -373,17 +376,17 @@
                          @click="day && goToDay(day.date)">
                         <template v-if="day">
                             <span class="month-day-num">{{ day.dom }}</span>
-                            <span class="month-day-total" v-if="day_secs(day.date)">
-                                {{ fmt_duration(day_secs(day.date)) }}
+                            <span class="month-day-total" v-if="entries_for_day(day.date).length">
+                                <live-total :entries="entries_for_day(day.date)"></live-total>
                             </span>
                         </template>
                     </div>
                 </template>
             </div>
             <div class="month-footer hbox">
-                <span>Month total: <strong>{{ fmt_duration(month_total_secs) }}</strong></span>
+                <span>Month total: <strong><live-total :entries="month_entries"></live-total></strong></span>
                 <button @click="onExportMonth" style="margin-left:1em">
-                    <i class="fas fa-download"></i> Export CSV
+                    <i class="fas fa-download"></i> Export CSV (this month)
                 </button>
             </div>
         </div>

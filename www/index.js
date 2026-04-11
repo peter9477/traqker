@@ -89,6 +89,67 @@ function download_text(filename, text) {
 }
 
 // ---------------------------------------------------------------------------
+// Entry duration helpers — accept explicit `now` (ms) so callers control
+// whether the result is reactive/live or static.
+
+function gross_secs(e, now) {
+    const start = parse_dt(e.started_at).getTime();
+    const end   = e.ended_at ? parse_dt(e.ended_at).getTime() : now;
+    return Math.max(0, Math.floor((end - start) / 1000));
+}
+
+function break_secs(e, now) {
+    let total = 0;
+    for (const b of (e.breaks || [])) {
+        if (!b.started_at) continue;
+        const bs = parse_dt(b.started_at).getTime();
+        const be = b.ended_at ? parse_dt(b.ended_at).getTime() : now;
+        total += Math.max(0, Math.floor((be - bs) / 1000));
+    }
+    return total;
+}
+
+function net_secs(e, now) {
+    return Math.max(0, gross_secs(e, now) - break_secs(e, now));
+}
+
+// ---------------------------------------------------------------------------
+// Shared tick — a single module-scope reactive value advanced once a second
+// by a single setInterval.  Any component that reads `live_now.t` will
+// re-render on each tick; components that don't read it stay quiescent.
+// This keeps live timer updates out of the root component's render path
+// (so e.g. the project <select> isn't patched every second).
+
+const live_now = Vue.reactive({ t: Date.now() });
+setInterval(() => { live_now.t = Date.now(); }, 1000);
+
+// LiveSecs — shows one entry's net duration live.
+
+const LiveSecs = {
+    props: ['entry'],
+    computed: {
+        net()  { return net_secs(this.entry, live_now.t); },
+        gross(){ return gross_secs(this.entry, live_now.t); },
+    },
+    methods: { fmt_duration },
+    template: `<span :title="'gross ' + fmt_duration(gross)">{{ fmt_duration(net) }}</span>`,
+};
+
+// LiveTotal — sums net durations for a list of entries, live.
+
+const LiveTotal = {
+    props: {
+        entries:  { type: Array, default: () => [] },
+        hideZero: { type: Boolean, default: false },
+    },
+    computed: {
+        total() { return this.entries.reduce((s, e) => s + net_secs(e, live_now.t), 0); },
+    },
+    methods: { fmt_duration },
+    template: `<span v-if="!hideZero || total">{{ fmt_duration(total) }}</span>`,
+};
+
+// ---------------------------------------------------------------------------
 // v-focus directive: auto-focus an element when it appears
 
 const vFocus = {
@@ -123,9 +184,6 @@ const app = Vue.createApp({
             view:         'day',          // 'day' | 'week' | 'month'
             current_date: today,          // YYYY-MM-DD — anchor for day/week/month
             current_month: today.slice(0, 7),  // YYYY-MM
-
-            // Live clock tick (for running timer display)
-            now_ts: Date.now(),
 
             // New-entry start form
             form: {
@@ -178,9 +236,6 @@ const app = Vue.createApp({
         });
         this.conn.open(ws_url());
 
-        // Tick every second for live timer display
-        this._tick = setInterval(() => { this.now_ts = Date.now(); }, 1000);
-
         // Keyboard shortcuts
         document.addEventListener('keydown', e => this.onKeydown(e));
 
@@ -194,9 +249,7 @@ const app = Vue.createApp({
         }
     },
 
-    beforeUnmount() {
-        clearInterval(this._tick);
-    },
+    beforeUnmount() {},
 
     computed: {
         // ---- entry queries -------------------------------------------------
@@ -213,14 +266,8 @@ const app = Vue.createApp({
                 .sort((a, b) => a.started_at.localeCompare(b.started_at));
         },
 
-        day_total_secs() {
-            return this.day_entries.reduce((s, e) => s + this.entry_net_secs(e), 0);
-        },
-
-        day_billable_secs() {
-            return this.day_entries
-                .filter(e => e.billable)
-                .reduce((s, e) => s + this.entry_net_secs(e), 0);
+        billable_day_entries() {
+            return this.day_entries.filter(e => e.billable);
         },
 
         // ---- project / task helpers ----------------------------------------
@@ -263,8 +310,13 @@ const app = Vue.createApp({
             return this.week_days[6].date;
         },
 
-        week_total_secs() {
-            return this.week_days.reduce((s, d) => s + this.day_secs(d.date), 0);
+        week_entries() {
+            const start = this.week_start_date;
+            const end   = this.week_end_date;
+            return this.entries.filter(e => {
+                const d = date_of(e.started_at);
+                return d >= start && d <= end;
+            });
         },
 
         // ---- month view ----------------------------------------------------
@@ -291,10 +343,10 @@ const app = Vue.createApp({
             return weeks;
         },
 
-        month_total_secs() {
-            return this.entries
-                .filter(e => date_of(e.started_at).slice(0, 7) === this.current_month)
-                .reduce((s, e) => s + this.entry_net_secs(e), 0);
+        month_entries() {
+            return this.entries.filter(e =>
+                date_of(e.started_at).slice(0, 7) === this.current_month
+            );
         },
 
         // ---- nav label -----------------------------------------------------
@@ -405,26 +457,9 @@ const app = Vue.createApp({
             return breaks.length > 0 && breaks[breaks.length - 1].ended_at === null;
         },
 
-        entry_gross_secs(e) {
-            const start = parse_dt(e.started_at).getTime();
-            const end   = e.ended_at ? parse_dt(e.ended_at).getTime() : this.now_ts;
-            return Math.max(0, Math.floor((end - start) / 1000));
-        },
-
-        entry_break_secs(e) {
-            let total = 0;
-            for (const b of (e.breaks || [])) {
-                if (!b.started_at) continue;
-                const bs = parse_dt(b.started_at).getTime();
-                const be = b.ended_at ? parse_dt(b.ended_at).getTime() : this.now_ts;
-                total += Math.max(0, Math.floor((be - bs) / 1000));
-            }
-            return total;
-        },
-
-        entry_net_secs(e) {
-            return Math.max(0, this.entry_gross_secs(e) - this.entry_break_secs(e));
-        },
+        entry_gross_secs(e) { return gross_secs(e, Date.now()); },
+        entry_break_secs(e) { return break_secs(e, Date.now()); },
+        entry_net_secs(e)   { return net_secs(e, Date.now()); },
 
         // ================================================================
         // Display helpers
@@ -883,4 +918,6 @@ const app = Vue.createApp({
 
 app.config.warnHandler = (msg) => console.warn('Vue:', msg);
 app.directive('focus', vFocus);
+app.component('live-secs',  LiveSecs);
+app.component('live-total', LiveTotal);
 app.mount('#vue-root');
