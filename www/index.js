@@ -149,6 +149,9 @@ const app = Vue.createApp({
             // Add-break inline form
             adding_break: null,  // {id, started_at, ended_at}
 
+            // Two-step break delete
+            pending_break_del: null,  // {id, bi}
+
             // Privacy
             show_private: false,
 
@@ -639,8 +642,22 @@ const app = Vue.createApp({
         // ================================================================
 
         onDeleteBreak(e, bi) {
-            const breaks = e.breaks.filter((_, i) => i !== bi);
-            this.conn.emit('update_entry', { id: e.id, breaks });
+            const p = this.pending_break_del;
+            if (p && p.id === e.id && p.bi === bi) {
+                // Second click — confirmed.
+                this.pending_break_del = null;
+                if (this._break_del_timer) clearTimeout(this._break_del_timer);
+                const breaks = e.breaks.filter((_, i) => i !== bi);
+                this.conn.emit('update_entry', { id: e.id, breaks });
+                return;
+            }
+            // First click — arm, then auto-disarm after 3s.
+            this.pending_break_del = { id: e.id, bi };
+            if (this._break_del_timer) clearTimeout(this._break_del_timer);
+            this._break_del_timer = setTimeout(() => {
+                this.pending_break_del = null;
+                this._break_del_timer = null;
+            }, 3000);
         },
 
         onAddBreakBegin(e) {
@@ -836,7 +853,7 @@ const app = Vue.createApp({
 
         onKeydown(e) {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-            if (e.key === 'Escape') { this.cancelEdit(); this.splitting = null; this.adding_break = null; }
+            if (e.key === 'Escape') { this.cancelEdit(); this.splitting = null; this.adding_break = null; this.pending_break_del = null; }
         },
 
         // ================================================================

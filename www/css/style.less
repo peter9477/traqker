@@ -476,11 +476,22 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
     .time-input { width: 3.5em; font-size: 0.9em; }
 
     .break-del {
+        margin-left: 0.6em;
         font-size: 0.8em;
-        padding: 0 0.2em;
+        padding: 0 0.3em;
         color: var(--text-muted);
         opacity: 0;
-        transition: opacity 0.1s;
+        transition: opacity 0.1s, background 0.1s, color 0.1s;
+
+        &.armed {
+            opacity: 1;
+            color: white;
+            background: @danger;
+            border-color: darken(@danger, 10%);
+            font-size: 0.75em;
+            font-weight: bold;
+            padding: 0 0.45em;
+        }
     }
     &:hover .break-del { opacity: 1; }
 }
