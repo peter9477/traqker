@@ -50,6 +50,10 @@
 
         <div class="push-right hbox" style="gap:0.4em">
             <span class="text-muted" style="font-size:0.85em">{{ hostname }}</span>
+            <button @mouseenter="show_private = true" @mouseleave="show_private = false"
+                    class="btn-icon" title="Reveal private entries (hold to view)">
+                <i class="fas fa-eye-slash"></i>
+            </button>
             <button @click="show_admin = !show_admin" :class="{active: show_admin}" title="Manage entities">
                 <i class="fas fa-cog"></i>
             </button>
@@ -75,7 +79,8 @@
            :class="is_paused(ae) ? 'fa-pause' : 'fa-circle'"></i>
         <span class="running-label">{{ is_paused(ae) ? 'Paused' : 'Running' }}</span>
         <span class="running-proj">{{ entry_label(ae) }}</span>
-        <span class="running-desc text-muted" v-if="ae.description">
+        <span class="running-desc text-muted" v-if="ae.description"
+              :class="{'privacy-blur': is_private_entry(ae) && !show_private}">
             — {{ ae.description }}
         </span>
         <span class="running-time">{{ fmt_duration(entry_net_secs(ae)) }}</span>
@@ -222,7 +227,8 @@
                     <div class="entry-desc flex-1">
                         <span class="clickable"
                               v-if="!(editing && editing.id===e.id && editing.field==='description')"
-                              @click="editField(e, 'description')">
+                              @click="editField(e, 'description')"
+                              :class="{'privacy-blur': is_private_entry(e) && !show_private}">
                             {{ e.description || '—' }}
                         </span>
                         <input v-else v-model="editing.value" class="desc-input"
@@ -298,7 +304,8 @@
                         <div class="we-time">{{ fmt_time(e.started_at) }}</div>
                         <div class="we-dur">{{ fmt_duration(entry_net_secs(e)) }}</div>
                         <div class="we-proj">{{ entry_label(e) || '—' }}</div>
-                        <div class="we-desc text-muted">{{ e.description }}</div>
+                        <div class="we-desc text-muted"
+                             :class="{'privacy-blur': is_private_entry(e) && !show_private}">{{ e.description }}</div>
                     </div>
                     <div v-if="!entries_for_day(day.date).length"
                          class="text-muted" style="font-size:0.8em; padding:0.3em 0">—</div>

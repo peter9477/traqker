@@ -146,6 +146,9 @@ const app = Vue.createApp({
             // Split-entry inline form
             splitting: null,  // {id, value}
 
+            // Privacy
+            show_private: false,
+
             // Admin panel
             show_admin: false,
             admin_tab:  'clients',
@@ -423,6 +426,11 @@ const app = Vue.createApp({
 
         fmt_time,
         fmt_duration,
+
+        is_private_entry(e) {
+            const proj = this.projects.find(p => p.id === e.project_id);
+            return proj && proj.name === 'Personal';
+        },
 
         entry_label(e) {
             const proj = this.projects.find(p => p.id === e.project_id);
