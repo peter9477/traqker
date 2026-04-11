@@ -585,6 +585,14 @@ const app = Vue.createApp({
             this.editing = null;
         },
 
+        // Save when focus leaves the entire editing widget (not when it
+        // moves between sibling inputs, e.g. date → time within started_at).
+        onEditFocusOut(e) {
+            if (!e.currentTarget.contains(e.relatedTarget)) {
+                this.saveEdit();
+            }
+        },
+
         saveProjectEdit(e) {
             if (!this.editing) return;
             const { project_id, task_id } = this.editing;

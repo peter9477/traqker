@@ -159,12 +159,13 @@
                               @click="editField(e, 'started_at')">
                             {{ fmt_time(e.started_at) }}
                         </span>
-                        <span v-else class="hbox" style="gap:0.2em">
+                        <span v-else class="hbox" style="gap:0.2em"
+                              @focusout="onEditFocusOut">
                             <input v-model="editing.date_str" type="date" class="date-input"
                                    @keydown.enter="saveEdit" @keydown.escape="cancelEdit">
                             <input v-model="editing.value" class="time-input"
                                    @keydown.enter="saveEdit" @keydown.escape="cancelEdit"
-                                   @blur="saveEdit" placeholder="HH:MM" v-focus>
+                                   placeholder="HH:MM" v-focus>
                         </span>
 
                         <span class="time-sep">–</span>
