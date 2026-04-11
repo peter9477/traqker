@@ -117,7 +117,7 @@ Date,Code,User,Start,stop,pause,Notes
 
 ## Key Implementation Notes
 
-- Only one running entry at a time (enforced by UI; server doesn't enforce).
+- Multiple running entries are allowed (parallel timers). Pause / resume / stop operate per-entry by id.
 - `is_paused(e)`: entry has `ended_at === null` AND last break has `ended_at === null`.
 - Split entry: original is shortened to `split_at`, a new entry is created from `split_at` onwards with the same metadata. Breaks are apportioned: breaks before split_at stay with the original; breaks after go to the new entry; a break straddling the split is truncated at split_at.
 - Admin panel: manages clients, projects, tasks. All entity changes broadcast to all connected clients.

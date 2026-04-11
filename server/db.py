@@ -69,11 +69,11 @@ class DB:
         ) as cur:
             return self._rows(await cur.fetchall())
 
-    async def get_running_entry(self) -> dict | None:
+    async def get_running_entries(self) -> list[dict]:
         async with self._db.execute(
-            'SELECT * FROM time_entry WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1'
+            'SELECT * FROM time_entry WHERE ended_at IS NULL ORDER BY started_at'
         ) as cur:
-            return self._row(await cur.fetchone())
+            return self._rows(await cur.fetchall())
 
     async def create_entry(self, person_id: int, started_at: str, **fields) -> dict:
         now = _now()

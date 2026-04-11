@@ -192,8 +192,10 @@ const app = Vue.createApp({
     computed: {
         // ---- entry queries -------------------------------------------------
 
-        active_entry() {
-            return this.entries.find(e => e.ended_at === null) || null;
+        active_entries() {
+            return this.entries
+                .filter(e => e.ended_at === null)
+                .sort((a, b) => a.started_at.localeCompare(b.started_at));
         },
 
         day_entries() {
@@ -464,10 +466,6 @@ const app = Vue.createApp({
         // ================================================================
 
         onStart() {
-            if (this.active_entry) {
-                this.toast('A timer is already running.', 'warning');
-                return;
-            }
             this.conn.emit('start_entry', {
                 project_id:  this.form.project_id,
                 task_id:     this.form.task_id,

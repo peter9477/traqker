@@ -93,10 +93,12 @@ class Client:
         start = today + 'T00:00:00'
         end   = today + 'T23:59:59'
         entries = await self.db.get_entries(start, end)
-        running = await self.db.get_running_entry()
-        # Include running entry even if it started before today
-        if running and not any(e['id'] == running['id'] for e in entries):
-            entries = [running] + entries
+        running = await self.db.get_running_entries()
+        # Include any running entries not already in today's range
+        existing_ids = {e['id'] for e in entries}
+        for r in running:
+            if r['id'] not in existing_ids:
+                entries.insert(0, r)
         await self.send(
             _t='state',
             today=today,

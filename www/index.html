@@ -67,26 +67,26 @@
     </div>
 
     <!-- ================================================================
-         Running-timer banner (all views)
+         Running-timer banners (all views) — one row per active timer
          ================================================================ -->
-    <div v-if="active_entry" class="running-banner hbox"
-         :class="{paused: is_paused(active_entry)}">
+    <div v-for="ae in active_entries" :key="ae.id"
+         class="running-banner hbox" :class="{paused: is_paused(ae)}">
         <i class="fas status-dot"
-           :class="is_paused(active_entry) ? 'fa-pause' : 'fa-circle'"></i>
-        <span class="running-label">{{ is_paused(active_entry) ? 'Paused' : 'Running' }}</span>
-        <span class="running-proj">{{ entry_label(active_entry) }}</span>
-        <span class="running-desc text-muted" v-if="active_entry.description">
-            — {{ active_entry.description }}
+           :class="is_paused(ae) ? 'fa-pause' : 'fa-circle'"></i>
+        <span class="running-label">{{ is_paused(ae) ? 'Paused' : 'Running' }}</span>
+        <span class="running-proj">{{ entry_label(ae) }}</span>
+        <span class="running-desc text-muted" v-if="ae.description">
+            — {{ ae.description }}
         </span>
-        <span class="running-time">{{ fmt_duration(entry_net_secs(active_entry)) }}</span>
+        <span class="running-time">{{ fmt_duration(entry_net_secs(ae)) }}</span>
         <div class="hbox" style="gap:0.3em; margin-left:0.8em">
-            <button v-if="!is_paused(active_entry)" @click="onPause(active_entry)">
+            <button v-if="!is_paused(ae)" @click="onPause(ae)">
                 <i class="fas fa-pause"></i> Pause
             </button>
-            <button v-if="is_paused(active_entry)" @click="onResume(active_entry)">
+            <button v-if="is_paused(ae)" @click="onResume(ae)">
                 <i class="fas fa-play"></i> Resume
             </button>
-            <button @click="onStop(active_entry)" class="danger">
+            <button @click="onStop(ae)" class="danger">
                 <i class="fas fa-stop"></i> Stop
             </button>
         </div>
@@ -101,7 +101,7 @@
         <div v-if="view === 'day'" class="day-view">
 
             <!-- Start form -->
-            <div class="start-form hbox" v-if="!active_entry">
+            <div class="start-form hbox">
                 <select v-model="form.project_id" @change="onProjectChange" class="form-select">
                     <option :value="null">— project —</option>
                     <option v-for="p in active_projects" :key="p.id" :value="p.id">
@@ -145,9 +145,6 @@
                         @click="form.manual_open = true" class="btn-icon" title="Add manual entry">
                     <i class="fas fa-plus"></i>
                 </button>
-            </div>
-            <div class="start-form-placeholder" v-else>
-                <span class="text-muted">Stop the running timer to start a new entry.</span>
             </div>
 
             <!-- Entry list -->
