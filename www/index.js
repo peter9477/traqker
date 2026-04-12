@@ -218,6 +218,7 @@ const app = Vue.createApp({
             admin_tab:  'clients',
             admin_form: { name: '', notes: '', code: '', client_id: null,
                           project_id: null, billable_default: true },
+            admin_editing: null,  // { kind, id, ...fields }
         };
     },
 
@@ -880,6 +881,31 @@ const app = Vue.createApp({
         onDeleteTask(t) {
             if (!confirm(`Delete task "${t.name}"?`)) return;
             this.conn.emit('delete_task', { id: t.id });
+        },
+
+        onStartEdit(kind, item) {
+            if (kind === 'client')  this.admin_editing = { kind, id: item.id, name: item.name, notes: item.notes || '' };
+            if (kind === 'project') this.admin_editing = { kind, id: item.id, name: item.name, code: item.code || '',
+                                                           client_id: item.client_id, billable_default: !!item.billable_default };
+            if (kind === 'task')    this.admin_editing = { kind, id: item.id, name: item.name, project_id: item.project_id };
+        },
+
+        onCancelEdit() {
+            this.admin_editing = null;
+        },
+
+        onSaveEdit() {
+            const e = this.admin_editing;
+            if (!e || !e.name.trim()) return;
+            if (e.kind === 'client') {
+                this.conn.emit('update_client',  { id: e.id, name: e.name.trim(), notes: e.notes || null });
+            } else if (e.kind === 'project') {
+                this.conn.emit('update_project', { id: e.id, name: e.name.trim(), code: e.code || null,
+                                                   client_id: e.client_id, billable_default: e.billable_default ? 1 : 0 });
+            } else if (e.kind === 'task') {
+                this.conn.emit('update_task',    { id: e.id, name: e.name.trim(), project_id: e.project_id });
+            }
+            this.admin_editing = null;
         },
 
         // ================================================================

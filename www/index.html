@@ -399,9 +399,9 @@
     <div v-if="show_admin" class="admin-panel">
         <div class="admin-header hbox">
             <div class="admin-tabs hbox" style="gap:0">
-                <button :class="{active: admin_tab==='clients'}"  @click="admin_tab='clients'">Clients</button>
-                <button :class="{active: admin_tab==='projects'}" @click="admin_tab='projects'">Projects</button>
-                <button :class="{active: admin_tab==='tasks'}"    @click="admin_tab='tasks'">Tasks</button>
+                <button :class="{active: admin_tab==='clients'}"  @click="admin_tab='clients';  admin_editing=null">Clients</button>
+                <button :class="{active: admin_tab==='projects'}" @click="admin_tab='projects'; admin_editing=null">Projects</button>
+                <button :class="{active: admin_tab==='tasks'}"    @click="admin_tab='tasks';    admin_editing=null">Tasks</button>
             </div>
             <button @click="show_admin=false" class="push-right btn-icon">
                 <i class="fas fa-times"></i>
@@ -416,11 +416,24 @@
                 <button type="submit">Add</button>
             </form>
             <table class="admin-table">
-                <tr v-for="c in clients" :key="c.id">
+                <template v-for="c in clients" :key="c.id">
+                <tr v-if="admin_editing && admin_editing.id === c.id" class="admin-edit-row">
+                    <td><input v-model="admin_editing.name" v-focus required @keydown.enter.prevent="onSaveEdit" @keydown.esc="onCancelEdit" class="flex-1"></td>
+                    <td><input v-model="admin_editing.notes" placeholder="Notes" @keydown.enter.prevent="onSaveEdit" @keydown.esc="onCancelEdit" class="flex-1"></td>
+                    <td class="hbox" style="gap:4px">
+                        <button @click="onSaveEdit" class="btn-icon" title="Save">✓</button>
+                        <button @click="onCancelEdit" class="btn-icon" title="Cancel">✕</button>
+                    </td>
+                </tr>
+                <tr v-else>
                     <td>{{ c.name }}</td>
                     <td class="text-muted">{{ c.notes }}</td>
-                    <td><button @click="onDeleteClient(c)" class="btn-icon danger">✕</button></td>
+                    <td class="hbox" style="gap:4px">
+                        <button @click="onStartEdit('client', c)" class="btn-icon" title="Edit"><i class="fas fa-pencil-alt"></i></button>
+                        <button @click="onDeleteClient(c)" class="btn-icon danger" title="Delete">✕</button>
+                    </td>
                 </tr>
+                </template>
             </table>
         </div>
 
@@ -437,13 +450,31 @@
                 <button type="submit">Add</button>
             </form>
             <table class="admin-table">
-                <tr v-for="p in projects" :key="p.id">
+                <template v-for="p in projects" :key="p.id">
+                <tr v-if="admin_editing && admin_editing.id === p.id" class="admin-edit-row">
+                    <td><input v-model="admin_editing.name" v-focus required @keydown.enter.prevent="onSaveEdit" @keydown.esc="onCancelEdit" class="flex-1"></td>
+                    <td><input v-model="admin_editing.code" placeholder="Code" style="width:7em" @keydown.enter.prevent="onSaveEdit" @keydown.esc="onCancelEdit"></td>
+                    <td><select v-model="admin_editing.client_id">
+                        <option :value="null">— client —</option>
+                        <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                    </select></td>
+                    <td><label><input type="checkbox" v-model="admin_editing.billable_default"> Billable</label></td>
+                    <td class="hbox" style="gap:4px">
+                        <button @click="onSaveEdit" class="btn-icon" title="Save">✓</button>
+                        <button @click="onCancelEdit" class="btn-icon" title="Cancel">✕</button>
+                    </td>
+                </tr>
+                <tr v-else>
                     <td>{{ p.name }}</td>
                     <td class="text-muted">{{ p.code }}</td>
                     <td class="text-muted">{{ client_name(p.client_id) }}</td>
                     <td><span v-if="!p.billable_default" class="badge warn">NB</span></td>
-                    <td><button @click="onDeleteProject(p)" class="btn-icon danger">✕</button></td>
+                    <td class="hbox" style="gap:4px">
+                        <button @click="onStartEdit('project', p)" class="btn-icon" title="Edit"><i class="fas fa-pencil-alt"></i></button>
+                        <button @click="onDeleteProject(p)" class="btn-icon danger" title="Delete">✕</button>
+                    </td>
                 </tr>
+                </template>
             </table>
         </div>
 
@@ -458,11 +489,27 @@
                 <button type="submit">Add</button>
             </form>
             <table class="admin-table">
-                <tr v-for="t in tasks" :key="t.id">
+                <template v-for="t in tasks" :key="t.id">
+                <tr v-if="admin_editing && admin_editing.id === t.id" class="admin-edit-row">
+                    <td><input v-model="admin_editing.name" v-focus required @keydown.enter.prevent="onSaveEdit" @keydown.esc="onCancelEdit" class="flex-1"></td>
+                    <td><select v-model="admin_editing.project_id">
+                        <option :value="null">— project (optional) —</option>
+                        <option v-for="p in active_projects" :key="p.id" :value="p.id">{{ p.name }}</option>
+                    </select></td>
+                    <td class="hbox" style="gap:4px">
+                        <button @click="onSaveEdit" class="btn-icon" title="Save">✓</button>
+                        <button @click="onCancelEdit" class="btn-icon" title="Cancel">✕</button>
+                    </td>
+                </tr>
+                <tr v-else>
                     <td>{{ t.name }}</td>
                     <td class="text-muted">{{ project_name(t.project_id) }}</td>
-                    <td><button @click="onDeleteTask(t)" class="btn-icon danger">✕</button></td>
+                    <td class="hbox" style="gap:4px">
+                        <button @click="onStartEdit('task', t)" class="btn-icon" title="Edit"><i class="fas fa-pencil-alt"></i></button>
+                        <button @click="onDeleteTask(t)" class="btn-icon danger" title="Delete">✕</button>
+                    </td>
                 </tr>
+                </template>
             </table>
         </div>
     </div>
