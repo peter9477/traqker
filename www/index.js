@@ -703,6 +703,10 @@ const app = Vue.createApp({
             this.conn.emit('update_entry', { id: e.id, project_id, task_id });
         },
 
+        toggleBillable(e) {
+            this.conn.emit('update_entry', { id: e.id, billable: e.billable ? 0 : 1 });
+        },
+
         onEditProjectChange() {
             // Clear task when project changes in edit mode
             if (!this.editing) return;

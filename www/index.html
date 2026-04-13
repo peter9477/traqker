@@ -190,8 +190,11 @@
 
                     <!-- Flags -->
                     <div class="entry-flags">
-                        <span v-if="!e.billable" class="badge warn" title="Not billable">NB</span>
-                        <span v-if="e.travel"    class="badge info" title="Travel">T</span>
+                        <span class="badge bill-toggle"
+                              :class="e.billable ? 'bill-on' : 'warn'"
+                              :title="e.billable ? 'Billable (click to mark non-billable)' : 'Not billable (click to mark billable)'"
+                              @click="toggleBillable(e)">{{ e.billable ? '$' : 'NB' }}</span>
+                        <span v-if="e.travel" class="badge info" title="Travel">T</span>
                     </div>
 
                     <!-- Description (click to edit) -->
