@@ -32,6 +32,12 @@ function fmt_month_label(ym) {
     return new Date(y, m - 1, 1).toLocaleDateString([], { month: 'long', year: 'numeric' });
 }
 
+// "04/12" from "2026-04-12T..."
+function fmt_mmdd(iso) {
+    const [, m, d] = iso.slice(0, 10).split('-');
+    return `${m}/${d}`;
+}
+
 // "1:30" from seconds
 function fmt_duration(secs) {
     if (!secs || secs < 0) return '0:00';
@@ -184,6 +190,8 @@ const app = Vue.createApp({
             view:         'day',          // 'day' | 'week' | 'month'
             current_date: today,          // YYYY-MM-DD — anchor for day/week/month
             current_month: today.slice(0, 7),  // YYYY-MM
+            highlight_entry_id: null,     // briefly set after badge-click to flash the target entry
+            badges_animate: false,        // true only during badge-click navigation; gates transition-group CSS
 
             // New-entry start form
             form: {
@@ -191,7 +199,6 @@ const app = Vue.createApp({
                 task_id:     null,
                 description: '',
                 billable:    true,
-                travel:      false,
                 // Manual entry (explicit start/end times)
                 manual_open: false,
                 start_time:  '',
@@ -261,6 +268,15 @@ const app = Vue.createApp({
                 .sort((a, b) => a.started_at.localeCompare(b.started_at));
         },
 
+        running_elsewhere() {
+            return this.active_entries.filter(e => {
+                const d = date_of(e.started_at);
+                if (this.view === 'day')   return d !== this.current_date;
+                if (this.view === 'week')  return d < this.week_start_date || d > this.week_end_date;
+                /* month */                return d.slice(0, 7) !== this.current_month;
+            });
+        },
+
         day_entries() {
             return this.entries
                 .filter(e => date_of(e.started_at) === this.current_date)
@@ -269,6 +285,14 @@ const app = Vue.createApp({
 
         billable_day_entries() {
             return this.day_entries.filter(e => e.billable);
+        },
+
+        billable_week_entries() {
+            return this.week_entries.filter(e => e.billable);
+        },
+
+        billable_month_entries() {
+            return this.month_entries.filter(e => e.billable);
         },
 
         // ---- project / task helpers ----------------------------------------
@@ -394,6 +418,16 @@ const app = Vue.createApp({
             // Initialise the current view's date from today
             this.current_date  = this.today;
             this.current_month = this.today.slice(0, 7);
+            // Pre-populate form: prefer most recent ended entry, else a running one
+            const ended  = this.entries.filter(e => e.ended_at !== null)
+                               .sort((a, b) => b.ended_at.localeCompare(a.ended_at));
+            const seed   = ended[0] || this.entries.filter(e => e.ended_at === null)
+                               .sort((a, b) => b.started_at.localeCompare(a.started_at))[0];
+            if (seed) {
+                this.form.project_id = seed.project_id;
+                this.form.task_id    = seed.task_id;
+                this.onProjectChange();
+            }
         },
 
         _msg_entries(msg) {
@@ -468,6 +502,8 @@ const app = Vue.createApp({
 
         fmt_time,
         fmt_duration,
+        fmt_mmdd,
+        date_of,
 
         is_private_entry(e) {
             const proj = this.projects.find(p => p.id === e.project_id);
@@ -521,7 +557,7 @@ const app = Vue.createApp({
                 task_id:     this.form.task_id,
                 description: this.form.description,
                 billable:    this.form.billable ? 1 : 0,
-                travel:      this.form.travel   ? 1 : 0,
+                travel:      0,
             });
             this.form.description = '';
         },
@@ -532,10 +568,12 @@ const app = Vue.createApp({
                 this.toast('Enter a valid start time HH:MM', 'warning');
                 return;
             }
+            if (!end_time || !end_time.match(/^\d{1,2}:\d{2}$/)) {
+                this.toast('Enter a valid end time HH:MM', 'warning');
+                return;
+            }
             const started_at = build_local_iso(this.current_date, start_time);
-            const ended_at = (end_time && end_time.match(/^\d{1,2}:\d{2}$/))
-                ? resolve_time_after(started_at, end_time)
-                : null;
+            const ended_at   = resolve_time_after(started_at, end_time);
             this.conn.emit('create_entry', {
                 started_at,
                 ended_at,
@@ -543,7 +581,7 @@ const app = Vue.createApp({
                 task_id:     this.form.task_id,
                 description: this.form.description,
                 billable:    this.form.billable ? 1 : 0,
-                travel:      this.form.travel   ? 1 : 0,
+                travel:      0,
             });
             this.form.start_time  = '';
             this.form.end_time    = '';
@@ -784,10 +822,31 @@ const app = Vue.createApp({
             this._load_for_view();
         },
 
-        goToDay(date_str) {
+        onBadgeBeforeLeave(el) {
+            // Pin the leaving badge to its current position before it goes position:absolute,
+            // otherwise it would snap to (0,0) of the container.
+            el.style.left = el.offsetLeft + 'px';
+            el.style.top  = el.offsetTop  + 'px';
+            el.style.width = el.offsetWidth + 'px';
+        },
+
+        goToDay(date_str, highlight_id = null) {
+            if (highlight_id != null) {
+                this.badges_animate = true;
+                // Cancel stale timers from a prior click so they can't kill this animation mid-flight
+                clearTimeout(this._badges_animate_timer);
+                clearTimeout(this._highlight_timer);
+            }
             this.current_date = date_str;
             this.view = 'day';
             this._load_for_view();
+            if (highlight_id != null) {
+                this.$nextTick(() => {
+                    this.highlight_entry_id = highlight_id;
+                    this._highlight_timer = setTimeout(() => { this.highlight_entry_id = null; }, 900);
+                    this._badges_animate_timer = setTimeout(() => { this.badges_animate = false; }, 3000);
+                });
+            }
         },
 
         _load_for_view() {

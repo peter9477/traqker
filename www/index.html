@@ -50,10 +50,6 @@
 
         <div class="push-right hbox" style="gap:0.4em">
             <span class="text-muted" style="font-size:0.85em">{{ hostname }}</span>
-            <button @mouseenter="show_private = true" @mouseleave="show_private = false"
-                    class="btn-icon" title="Reveal private entries (hold to view)">
-                <i class="fas fa-eye-slash"></i>
-            </button>
             <button @click="show_admin = !show_admin" :class="{active: show_admin}" title="Manage entities">
                 <i class="fas fa-cog"></i>
             </button>
@@ -70,32 +66,20 @@
         <i class="fas fa-sync-alt"></i> Update available — click to reload.
     </div>
 
-    <!-- ================================================================
-         Running-timer banners (all views) — one row per active timer
-         ================================================================ -->
-    <div v-for="ae in active_entries" :key="ae.id"
-         class="running-banner hbox" :class="{paused: is_paused(ae)}">
-        <i class="fas status-dot"
-           :class="is_paused(ae) ? 'fa-pause' : 'fa-circle'"></i>
-        <span class="running-label">{{ is_paused(ae) ? 'Paused' : 'Running' }}</span>
-        <span class="running-proj">{{ entry_label(ae) }}</span>
-        <span class="running-desc text-muted" v-if="ae.description"
-              :class="{'privacy-blur': is_private_entry(ae) && !show_private}">
-            — {{ ae.description }}
-        </span>
-        <live-secs :entry="ae" class="running-time"></live-secs>
-        <div class="hbox" style="gap:0.3em; margin-left:0.8em">
-            <button v-if="!is_paused(ae)" @click="onPause(ae)">
-                <i class="fas fa-pause"></i> Pause
-            </button>
-            <button v-if="is_paused(ae)" @click="onResume(ae)">
-                <i class="fas fa-play"></i> Resume
-            </button>
-            <button @click="onStop(ae)" class="danger">
-                <i class="fas fa-stop"></i> Stop
-            </button>
+    <!-- Running-timer badges for timers not visible in the current view -->
+    <transition-group name="badge" tag="div" class="running-badges hbox"
+                      :class="{'no-anim': !badges_animate}"
+                      @before-leave="onBadgeBeforeLeave">
+        <div v-for="e in running_elsewhere" :key="e.id"
+             class="running-badge" :class="{paused: is_paused(e)}"
+             @click="goToDay(date_of(e.started_at), e.id)"
+             :title="'Go to ' + date_of(e.started_at)">
+            <i class="fas" :class="is_paused(e) ? 'fa-pause' : 'fa-circle'"></i>
+            <span class="rb-date">{{ fmt_mmdd(e.started_at) }}</span>
+            <span class="rb-proj">{{ projects.find(p => p.id === e.project_id)?.name || '—' }}</span>
+            <live-secs :entry="e"></live-secs>
         </div>
-    </div>
+    </transition-group>
 
     <!-- ================================================================
          Main content
@@ -105,8 +89,8 @@
         <!-- ---- Day view ---- -->
         <div v-if="view === 'day'" class="day-view">
 
-            <!-- Start form -->
-            <div class="start-form hbox">
+            <!-- Manual-add toolbar: past days always, today when toggled -->
+            <div class="start-form hbox" v-if="current_date !== today || form.manual_open">
                 <select v-model="form.project_id" @change="onProjectChange" class="form-select">
                     <option :value="null">— project —</option>
                     <option v-for="p in active_projects" :key="p.id" :value="p.id">
@@ -118,44 +102,31 @@
                     <option v-for="t in form_tasks" :key="t.id" :value="t.id">{{ t.name }}</option>
                 </select>
                 <input v-model="form.description"
-                       @keydown.enter="current_date === today ? onStart() : onAdd()"
+                       @keydown.enter="onAdd"
                        class="form-desc" placeholder="Description…">
                 <label class="form-check" title="Billable">
                     <input type="checkbox" v-model="form.billable"> Bill
                 </label>
-                <label class="form-check" title="Travel">
-                    <input type="checkbox" v-model="form.travel"> Travel
-                </label>
-                <!-- Live timer: only when viewing today -->
-                <button v-if="current_date === today" @click="onStart" class="btn-start">
-                    <i class="fas fa-play"></i> Start
+                <input v-model="form.start_time" class="time-input" placeholder="HH:MM"
+                       @keydown.enter="onAdd">
+                <span class="time-sep">–</span>
+                <input v-model="form.end_time" class="time-input" placeholder="HH:MM"
+                       @keydown.enter="onAdd">
+                <button @click="onAdd" class="btn-add"
+                        :disabled="!form.start_time.match(/^\d{1,2}:\d{2}$/) || !form.end_time.match(/^\d{1,2}:\d{2}$/)">
+                    <i class="fas fa-plus"></i> Add
                 </button>
-                <!-- Manual entry: always on past days, toggled on today -->
-                <template v-if="current_date !== today || form.manual_open">
-                    <input v-model="form.start_time" class="time-input" placeholder="HH:MM"
-                           @keydown.enter="onAdd" v-focus>
-                    <span class="time-sep">–</span>
-                    <input v-model="form.end_time" class="time-input" placeholder="HH:MM"
-                           @keydown.enter="onAdd">
-                    <button @click="onAdd" class="btn-add">
-                        <i class="fas fa-plus"></i> Add
-                    </button>
-                    <button v-if="current_date === today"
-                            @click="form.manual_open = false; form.start_time = ''; form.end_time = ''"
-                            class="btn-icon" title="Cancel manual entry">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </template>
-                <button v-if="current_date === today && !form.manual_open"
-                        @click="form.manual_open = true" class="btn-icon" title="Add manual entry">
-                    <i class="fas fa-plus"></i>
+                <button v-if="current_date === today"
+                        @click="form.manual_open = false; form.start_time = ''; form.end_time = ''"
+                        class="btn-icon" title="Cancel manual entry">
+                    <i class="fas fa-times"></i>
                 </button>
             </div>
 
             <!-- Entry list -->
             <div class="entry-list" v-if="day_entries.length">
                 <div v-for="e in day_entries" :key="e.id"
-                     class="entry" :class="{running: is_running(e), paused: is_paused(e)}">
+                     class="entry" :class="{running: is_running(e), paused: is_paused(e), 'flash-highlight': highlight_entry_id === e.id}">
 
                     <!-- Times (click to edit) -->
                     <div class="entry-times">
@@ -228,7 +199,9 @@
                         <span class="clickable"
                               v-if="!(editing && editing.id===e.id && editing.field==='description')"
                               @click="editField(e, 'description')"
-                              :class="{'privacy-blur': is_private_entry(e) && !show_private}">
+                              :class="{'privacy-blur': is_private_entry(e) && !show_private}"
+                              @mouseenter="is_private_entry(e) && (show_private = true)"
+                              @mouseleave="show_private = false">
                             {{ e.description || '—' }}
                         </span>
                         <input v-else v-model="editing.value" class="desc-input"
@@ -238,16 +211,30 @@
 
                     <!-- Controls -->
                     <div class="entry-controls hbox">
-                        <button v-if="!is_running(e)" @click="onSplitBegin(e)"
-                                class="btn-icon" title="Split">
-                            <i class="fas fa-scissors"></i>
-                        </button>
                         <button @click="onAddBreakBegin(e)" class="btn-icon" title="Add break">
                             <i class="fas fa-coffee"></i>
                         </button>
-                        <button @click="onDelete(e)" class="btn-icon danger" title="Delete">
-                            <i class="fas fa-trash"></i>
-                        </button>
+                        <template v-if="is_running(e)">
+                            <button v-if="!is_paused(e)" @click="onPause(e)"
+                                    class="btn-icon" title="Pause">
+                                <i class="fas fa-pause"></i>
+                            </button>
+                            <button v-if="is_paused(e)" @click="onResume(e)"
+                                    class="btn-icon" title="Resume">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <button @click="onStop(e)" class="btn-icon danger" title="Stop">
+                                <i class="fas fa-stop"></i>
+                            </button>
+                        </template>
+                        <template v-else>
+                            <button @click="onSplitBegin(e)" class="btn-icon" title="Split">
+                                <i class="fas fa-scissors"></i>
+                            </button>
+                            <button @click="onDelete(e)" class="btn-icon danger" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </template>
                     </div>
 
                     <!-- Split form -->
@@ -307,6 +294,17 @@
             </div>
             <div v-else class="empty-state text-muted">No entries for this day.</div>
 
+            <!-- Start button (today, normal mode) -->
+            <div v-if="current_date === today && !form.manual_open" class="start-bar hbox"
+                 @click="onStart">
+                <button class="btn-start btn-start-full">
+                    <i class="fas fa-play"></i> Start
+                </button>
+                <button @click.stop="form.manual_open = true" class="btn-icon" title="Add manual entry">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+
             <!-- Day totals + export -->
             <div class="day-footer">
                 <div class="day-total hbox" v-if="day_entries.length">
@@ -345,14 +343,20 @@
                         </div>
                         <div class="we-proj">{{ entry_label(e) || '—' }}</div>
                         <div class="we-desc text-muted"
-                             :class="{'privacy-blur': is_private_entry(e) && !show_private}">{{ e.description }}</div>
+                             :class="{'privacy-blur': is_private_entry(e) && !show_private}"
+                             @mouseenter="is_private_entry(e) && (show_private = true)"
+                             @mouseleave="show_private = false">{{ e.description }}</div>
                     </div>
                     <div v-if="!entries_for_day(day.date).length"
                          class="text-muted" style="font-size:0.8em; padding:0.3em 0">—</div>
                 </div>
             </div>
             <div class="week-footer hbox">
-                <span>Week total: <strong><live-total :entries="week_entries"></live-total></strong></span>
+                <span>Week total: <strong><live-total :entries="week_entries"></live-total></strong>
+                    <span class="text-muted" v-if="billable_week_entries.length < week_entries.length">
+                        (<live-total :entries="billable_week_entries"></live-total> billable)
+                    </span>
+                </span>
                 <button @click="onExportWeek" style="margin-left:1em">
                     <i class="fas fa-download"></i> Export CSV (this week)
                 </button>
@@ -371,11 +375,14 @@
                              'other-month': day && day.date.slice(0,7) !== current_month,
                              today: day && day.date === today,
                              empty: !day,
-                             clickable: !!day
+                             clickable: !!day,
+                             'has-running': day && entries_for_day(day.date).some(is_running)
                          }"
                          @click="day && goToDay(day.date)">
                         <template v-if="day">
                             <span class="month-day-num">{{ day.dom }}</span>
+                            <i v-if="entries_for_day(day.date).some(is_running)"
+                               class="fas fa-circle running-dot"></i>
                             <span class="month-day-total" v-if="entries_for_day(day.date).length">
                                 <live-total :entries="entries_for_day(day.date)"></live-total>
                             </span>
@@ -384,7 +391,11 @@
                 </template>
             </div>
             <div class="month-footer hbox">
-                <span>Month total: <strong><live-total :entries="month_entries"></live-total></strong></span>
+                <span>Month total: <strong><live-total :entries="month_entries"></live-total></strong>
+                    <span class="text-muted" v-if="billable_month_entries.length < month_entries.length">
+                        (<live-total :entries="billable_month_entries"></live-total> billable)
+                    </span>
+                </span>
                 <button @click="onExportMonth" style="margin-left:1em">
                     <i class="fas fa-download"></i> Export CSV (this month)
                 </button>
