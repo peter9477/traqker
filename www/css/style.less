@@ -1,4 +1,83 @@
-@import "const.less";
+// const.less — Color system
+//
+// Theming strategy:
+//   1. Set the 4 seed variables below to define your palette.
+//   2. The derived section adjusts automatically — only edit it to fine-tune.
+//   3. Keep the semantic names (primary/success/danger/warning/info) consistent
+//      across projects so that style.less and component styles are portable.
+//
+// Hue guide (rough):
+//   0   red      60  yellow     120  green
+//   180 cyan     210 blue       270  purple
+//   300 magenta  330 pink
+
+
+// ============================================================
+// Seed colors — change these to theme the app
+
+@hue:      39;
+@primary: hsl(@hue, 51%, 45%);
+@neutral: hsl(@hue, 18%, 46%);
+@success: hsl(120, 40%, 45%);
+@danger:  hsl(  0, 55%, 50%);
+//@hue:     226;                  // brand hue (0–360)
+//@primary: hsl(@hue, 79%, 47%);  // actions, links, highlights
+//@neutral: hsl(@hue, 38%, 45%);  // base for grays (inherits hue tint)
+//@success: hsl(120, 40%, 45%);   // positive / connected / ok
+//@danger:  hsl(  0, 55%, 50%);   // errors / disconnected
+
+// ============================================================
+// Derived — safe to leave as-is; edit only to tune
+
+@warning:   hsl(35, 75%, 50%);             // caution / pending
+@info:      lighten(desaturate(@primary, 15%), 10%);
+
+// Light mode values — also used as defaults for CSS custom properties below
+@bg-page:   lighten(@neutral, 40%);        // page/body background
+@bg-panel:  lighten(@neutral, 32%);        // cards, header, sidebars
+@bg-input:  lighten(@neutral, 45%);        // text inputs, select
+@bg-button: lighten(@neutral, 38%);        // default button fill
+@bg-active: lighten(@primary, 30%);        // pressed / active state
+@text:      darken(@neutral, 25%);         // primary body text
+@text-muted: lighten(@neutral, 5%);        // secondary / placeholder text
+@border:    lighten(@neutral, 20%);        // dividers, input borders
+
+
+// ============================================================
+// CSS custom properties — enable runtime dark mode without recompiling LESS.
+//
+// style.less uses var(--bg-page) etc. rather than @bg-page directly,
+// so that html.dark overrides take effect at runtime.
+//
+// Semantic colours (@primary, @success, @danger, @warning) stay as plain
+// LESS variables — they're legible on both light and dark backgrounds.
+
+html {
+    --bg-page:    @bg-page;
+    --bg-panel:   @bg-panel;
+    --bg-input:   @bg-input;
+    --bg-button:  @bg-button;
+    --bg-active:  @bg-active;
+    --text:       @text;
+    --text-muted: @text-muted;
+    --border:     @border;
+}
+
+// Dark mode — toggled by adding .dark to <html> (see index.js).
+// Also auto-activated via prefers-color-scheme on first visit.
+html.dark {
+    --bg-page:    darken(@neutral, 28%);
+    --bg-panel:   darken(@neutral, 22%);
+    --bg-input:   darken(@neutral, 25%);
+    --bg-button:  darken(@neutral, 18%);
+    --bg-active:  darken(@primary, 10%);
+    --text:       lighten(@neutral, 38%);
+    --text-muted: lighten(@neutral, 18%);
+    --border:     darken(@neutral, 8%);
+}
+
+
+// ============================================================
 
 // Workaround for a Chrome flexbox quirk where flex children with min-width/height
 // 'auto' cause overflow instead of shrinking. Setting 0 fixes this globally.
@@ -259,32 +338,62 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
     text-align: center;
 }
 
-// ---- Running banner ----
 
-.running-banner {
+// ---- Running-elsewhere badge strip ----
+
+.running-badges {
     flex: none;
+    flex-wrap: wrap;
+    gap: 0.4em;
     padding: 0.3em 0.7em;
-    background: lighten(@success, 30%);
-    border-bottom: 1px solid lighten(@success, 15%);
-    gap: 0.5em;
-    font-size: 0.95em;
-
-    html.dark & {
-        background: darken(@success, 20%);
-        border-color: darken(@success, 25%);
-    }
-
-    &.paused {
-        background: lighten(@warning, 30%);
-        border-color: lighten(@warning, 15%);
-        html.dark & { background: darken(@warning, 25%); border-color: darken(@warning, 30%); }
-    }
-
-    .status-dot { font-size: 0.6em; color: @success; }
-    .running-label { font-weight: bold; }
-    .running-proj  { color: @primary; font-weight: bold; }
-    .running-time  { font-weight: bold; font-size: 1.1em; margin-left: auto; }
+    border-bottom: 1px solid var(--border);
+    position: relative;   // containing block for absolute leaving badges
+    &:empty { display: none; }
 }
+
+// Badge TransitionGroup animations
+// Leave: pin in place (position:absolute) so siblings can FLIP-slide concurrently with the fade.
+// The before-leave hook stamps left/top/width so the badge stays visually put after going absolute.
+.badge-leave-active {
+    transition: opacity 3s ease, transform 3s ease, filter 3s ease !important;
+    position: absolute;
+    pointer-events: none;
+}
+.badge-leave-to   { opacity: 0; transform: scale(0.85); filter: saturate(0); }
+.badge-move       { transition: transform 1.5s ease !important; }  // override .running-badge shorthand
+.badge-enter-active { transition: opacity 0.3s ease !important; }
+.badge-enter-from { opacity: 0; }
+
+// When not triggered by a badge click, collapse all transition durations to zero.
+// Uses a class gate rather than :css="false" so Vue's FLIP move-detection stays active.
+.running-badges.no-anim {
+    .badge-leave-active { transition: none !important; position: static !important; }
+    .badge-move         { transition: none !important; }
+    .badge-enter-active { transition: none !important; }
+}
+
+.running-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    padding: 0.15em 0.6em;
+    border-radius: 1em;
+    background: lighten(@success, 35%);
+    font-size: 0.88em;
+    cursor: pointer;
+    transition: filter 0.1s;
+    html.dark & { background: darken(@success, 28%); }
+    &:hover { filter: brightness(88%); }
+    &.paused {
+        background: lighten(@warning, 32%);
+        html.dark & { background: darken(@warning, 28%); }
+    }
+    .fa-circle { font-size: 0.55em; color: @success; vertical-align: middle; }
+    .fa-pause  { font-size: 0.7em;  color: @warning; }
+    .rb-date   { color: var(--text-muted); }
+    .rb-proj   { font-weight: 600; }
+}
+
 
 // ---- Start form ----
 
@@ -332,6 +441,25 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
     color: white;
     border-color: darken(@success, 10%);
     &:hover { filter: brightness(90%); }
+}
+
+.start-bar {
+    gap: 0.4em;
+    padding: 0.4em 0;
+    border-top: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.1s;
+    &:hover {
+        background: lighten(@success, 38%);
+        border-top-color: lighten(@success, 20%);
+        html.dark & { background: darken(@success, 30%); border-top-color: darken(@success, 20%); }
+    }
+    &:hover .btn-start { filter: brightness(90%); }
+}
+
+.btn-start-full {
+    flex: 1;
+    justify-content: center;
 }
 
 .btn-add {
@@ -433,9 +561,6 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
 
 .entry-controls {
     gap: 0.2em;
-    opacity: 0;
-    transition: opacity 0.1s;
-    .entry:hover & { opacity: 1; }
 }
 
 .btn-icon {
@@ -502,8 +627,15 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
     padding: 0.05em 0.3em;
     border-radius: 0.2em;
     border: 1px solid currentColor;
-    &.warn { color: @warning; }
-    &.info { color: @info; }
+    &.warn     { color: @warning; }
+    &.info     { color: @info; }
+    &.bill-on  { color: @success; }
+}
+
+.bill-toggle {
+    cursor: pointer;
+    user-select: none;
+    &:hover { filter: brightness(1.25); opacity: 1; }
 }
 
 .clickable {
@@ -626,6 +758,30 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
 .month-day-num   { font-size: 0.85em; color: var(--text-muted); }
 .month-day-total { font-weight: bold; color: @primary; font-size: 0.9em; }
 
+.month-cell.has-running {
+    background: lighten(@success, 38%);
+    html.dark & { background: darken(@success, 30%); }
+}
+
+.running-dot {
+    font-size: 0.45em;
+    color: @success;
+    vertical-align: middle;
+}
+
+@keyframes flash-pulse {
+    0%, 40%, 80% { background: lighten(@warning, 28%); }
+    20%, 60%, 100% { background: transparent; }
+}
+.flash-highlight {
+    animation: flash-pulse 0.9s ease-out;
+    html.dark & { animation-name: flash-pulse-dark; }
+}
+@keyframes flash-pulse-dark {
+    0%, 40%, 80% { background: darken(@warning, 22%); }
+    20%, 60%, 100% { background: transparent; }
+}
+
 .month-footer {
     padding: 0.4em 0;
     gap: 0.5em;
@@ -682,6 +838,12 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
         padding: 0.2em 0.5em;
         border-bottom: 1px solid var(--border);
         vertical-align: middle;
+    }
+
+    tr.admin-edit-row td {
+        background: var(--bg-page);
+        padding: 0.3em 0.5em;
+        input, select { font-size: 0.95em; }
     }
 }
 

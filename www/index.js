@@ -32,6 +32,12 @@ function fmt_month_label(ym) {
     return new Date(y, m - 1, 1).toLocaleDateString([], { month: 'long', year: 'numeric' });
 }
 
+// "04/12" from "2026-04-12T..."
+function fmt_mmdd(iso) {
+    const [, m, d] = iso.slice(0, 10).split('-');
+    return `${m}/${d}`;
+}
+
 // "1:30" from seconds
 function fmt_duration(secs) {
     if (!secs || secs < 0) return '0:00';
@@ -89,6 +95,67 @@ function download_text(filename, text) {
 }
 
 // ---------------------------------------------------------------------------
+// Entry duration helpers — accept explicit `now` (ms) so callers control
+// whether the result is reactive/live or static.
+
+function gross_secs(e, now) {
+    const start = parse_dt(e.started_at).getTime();
+    const end   = e.ended_at ? parse_dt(e.ended_at).getTime() : now;
+    return Math.max(0, Math.floor((end - start) / 1000));
+}
+
+function break_secs(e, now) {
+    let total = 0;
+    for (const b of (e.breaks || [])) {
+        if (!b.started_at) continue;
+        const bs = parse_dt(b.started_at).getTime();
+        const be = b.ended_at ? parse_dt(b.ended_at).getTime() : now;
+        total += Math.max(0, Math.floor((be - bs) / 1000));
+    }
+    return total;
+}
+
+function net_secs(e, now) {
+    return Math.max(0, gross_secs(e, now) - break_secs(e, now));
+}
+
+// ---------------------------------------------------------------------------
+// Shared tick — a single module-scope reactive value advanced once a second
+// by a single setInterval.  Any component that reads `live_now.t` will
+// re-render on each tick; components that don't read it stay quiescent.
+// This keeps live timer updates out of the root component's render path
+// (so e.g. the project <select> isn't patched every second).
+
+const live_now = Vue.reactive({ t: Date.now() });
+setInterval(() => { live_now.t = Date.now(); }, 1000);
+
+// LiveSecs — shows one entry's net duration live.
+
+const LiveSecs = {
+    props: ['entry'],
+    computed: {
+        net()  { return net_secs(this.entry, live_now.t); },
+        gross(){ return gross_secs(this.entry, live_now.t); },
+    },
+    methods: { fmt_duration },
+    template: `<span :title="'gross ' + fmt_duration(gross)">{{ fmt_duration(net) }}</span>`,
+};
+
+// LiveTotal — sums net durations for a list of entries, live.
+
+const LiveTotal = {
+    props: {
+        entries:  { type: Array, default: () => [] },
+        hideZero: { type: Boolean, default: false },
+    },
+    computed: {
+        total() { return this.entries.reduce((s, e) => s + net_secs(e, live_now.t), 0); },
+    },
+    methods: { fmt_duration },
+    template: `<span v-if="!hideZero || total">{{ fmt_duration(total) }}</span>`,
+};
+
+// ---------------------------------------------------------------------------
 // v-focus directive: auto-focus an element when it appears
 
 const vFocus = {
@@ -123,9 +190,8 @@ const app = Vue.createApp({
             view:         'day',          // 'day' | 'week' | 'month'
             current_date: today,          // YYYY-MM-DD — anchor for day/week/month
             current_month: today.slice(0, 7),  // YYYY-MM
-
-            // Live clock tick (for running timer display)
-            now_ts: Date.now(),
+            highlight_entry_id: null,     // briefly set after badge-click to flash the target entry
+            badges_animate: false,        // true only during badge-click navigation; gates transition-group CSS
 
             // New-entry start form
             form: {
@@ -133,7 +199,6 @@ const app = Vue.createApp({
                 task_id:     null,
                 description: '',
                 billable:    true,
-                travel:      false,
                 // Manual entry (explicit start/end times)
                 manual_open: false,
                 start_time:  '',
@@ -160,6 +225,7 @@ const app = Vue.createApp({
             admin_tab:  'clients',
             admin_form: { name: '', notes: '', code: '', client_id: null,
                           project_id: null, billable_default: true },
+            admin_editing: null,  // { kind, id, ...fields }
         };
     },
 
@@ -178,9 +244,6 @@ const app = Vue.createApp({
         });
         this.conn.open(ws_url());
 
-        // Tick every second for live timer display
-        this._tick = setInterval(() => { this.now_ts = Date.now(); }, 1000);
-
         // Keyboard shortcuts
         document.addEventListener('keydown', e => this.onKeydown(e));
 
@@ -194,9 +257,7 @@ const app = Vue.createApp({
         }
     },
 
-    beforeUnmount() {
-        clearInterval(this._tick);
-    },
+    beforeUnmount() {},
 
     computed: {
         // ---- entry queries -------------------------------------------------
@@ -207,20 +268,31 @@ const app = Vue.createApp({
                 .sort((a, b) => a.started_at.localeCompare(b.started_at));
         },
 
+        running_elsewhere() {
+            return this.active_entries.filter(e => {
+                const d = date_of(e.started_at);
+                if (this.view === 'day')   return d !== this.current_date;
+                if (this.view === 'week')  return d < this.week_start_date || d > this.week_end_date;
+                /* month */                return d.slice(0, 7) !== this.current_month;
+            });
+        },
+
         day_entries() {
             return this.entries
                 .filter(e => date_of(e.started_at) === this.current_date)
                 .sort((a, b) => a.started_at.localeCompare(b.started_at));
         },
 
-        day_total_secs() {
-            return this.day_entries.reduce((s, e) => s + this.entry_net_secs(e), 0);
+        billable_day_entries() {
+            return this.day_entries.filter(e => e.billable);
         },
 
-        day_billable_secs() {
-            return this.day_entries
-                .filter(e => e.billable)
-                .reduce((s, e) => s + this.entry_net_secs(e), 0);
+        billable_week_entries() {
+            return this.week_entries.filter(e => e.billable);
+        },
+
+        billable_month_entries() {
+            return this.month_entries.filter(e => e.billable);
         },
 
         // ---- project / task helpers ----------------------------------------
@@ -263,8 +335,13 @@ const app = Vue.createApp({
             return this.week_days[6].date;
         },
 
-        week_total_secs() {
-            return this.week_days.reduce((s, d) => s + this.day_secs(d.date), 0);
+        week_entries() {
+            const start = this.week_start_date;
+            const end   = this.week_end_date;
+            return this.entries.filter(e => {
+                const d = date_of(e.started_at);
+                return d >= start && d <= end;
+            });
         },
 
         // ---- month view ----------------------------------------------------
@@ -291,10 +368,10 @@ const app = Vue.createApp({
             return weeks;
         },
 
-        month_total_secs() {
-            return this.entries
-                .filter(e => date_of(e.started_at).slice(0, 7) === this.current_month)
-                .reduce((s, e) => s + this.entry_net_secs(e), 0);
+        month_entries() {
+            return this.entries.filter(e =>
+                date_of(e.started_at).slice(0, 7) === this.current_month
+            );
         },
 
         // ---- nav label -----------------------------------------------------
@@ -341,6 +418,16 @@ const app = Vue.createApp({
             // Initialise the current view's date from today
             this.current_date  = this.today;
             this.current_month = this.today.slice(0, 7);
+            // Pre-populate form: prefer most recent ended entry, else a running one
+            const ended  = this.entries.filter(e => e.ended_at !== null)
+                               .sort((a, b) => b.ended_at.localeCompare(a.ended_at));
+            const seed   = ended[0] || this.entries.filter(e => e.ended_at === null)
+                               .sort((a, b) => b.started_at.localeCompare(a.started_at))[0];
+            if (seed) {
+                this.form.project_id = seed.project_id;
+                this.form.task_id    = seed.task_id;
+                this.onProjectChange();
+            }
         },
 
         _msg_entries(msg) {
@@ -405,26 +492,9 @@ const app = Vue.createApp({
             return breaks.length > 0 && breaks[breaks.length - 1].ended_at === null;
         },
 
-        entry_gross_secs(e) {
-            const start = parse_dt(e.started_at).getTime();
-            const end   = e.ended_at ? parse_dt(e.ended_at).getTime() : this.now_ts;
-            return Math.max(0, Math.floor((end - start) / 1000));
-        },
-
-        entry_break_secs(e) {
-            let total = 0;
-            for (const b of (e.breaks || [])) {
-                if (!b.started_at) continue;
-                const bs = parse_dt(b.started_at).getTime();
-                const be = b.ended_at ? parse_dt(b.ended_at).getTime() : this.now_ts;
-                total += Math.max(0, Math.floor((be - bs) / 1000));
-            }
-            return total;
-        },
-
-        entry_net_secs(e) {
-            return Math.max(0, this.entry_gross_secs(e) - this.entry_break_secs(e));
-        },
+        entry_gross_secs(e) { return gross_secs(e, Date.now()); },
+        entry_break_secs(e) { return break_secs(e, Date.now()); },
+        entry_net_secs(e)   { return net_secs(e, Date.now()); },
 
         // ================================================================
         // Display helpers
@@ -432,6 +502,8 @@ const app = Vue.createApp({
 
         fmt_time,
         fmt_duration,
+        fmt_mmdd,
+        date_of,
 
         is_private_entry(e) {
             const proj = this.projects.find(p => p.id === e.project_id);
@@ -485,7 +557,7 @@ const app = Vue.createApp({
                 task_id:     this.form.task_id,
                 description: this.form.description,
                 billable:    this.form.billable ? 1 : 0,
-                travel:      this.form.travel   ? 1 : 0,
+                travel:      0,
             });
             this.form.description = '';
         },
@@ -496,10 +568,12 @@ const app = Vue.createApp({
                 this.toast('Enter a valid start time HH:MM', 'warning');
                 return;
             }
+            if (!end_time || !end_time.match(/^\d{1,2}:\d{2}$/)) {
+                this.toast('Enter a valid end time HH:MM', 'warning');
+                return;
+            }
             const started_at = build_local_iso(this.current_date, start_time);
-            const ended_at = (end_time && end_time.match(/^\d{1,2}:\d{2}$/))
-                ? resolve_time_after(started_at, end_time)
-                : null;
+            const ended_at   = resolve_time_after(started_at, end_time);
             this.conn.emit('create_entry', {
                 started_at,
                 ended_at,
@@ -507,7 +581,7 @@ const app = Vue.createApp({
                 task_id:     this.form.task_id,
                 description: this.form.description,
                 billable:    this.form.billable ? 1 : 0,
-                travel:      this.form.travel   ? 1 : 0,
+                travel:      0,
             });
             this.form.start_time  = '';
             this.form.end_time    = '';
@@ -634,6 +708,10 @@ const app = Vue.createApp({
             this.conn.emit('update_entry', payload);
         },
 
+        toggleBillable(e) {
+            this.conn.emit('update_entry', { id: e.id, billable: e.billable ? 0 : 1 });
+        },
+
         onEditProjectChange() {
             // Clear task when project changes in edit mode
             if (!this.editing) return;
@@ -753,10 +831,31 @@ const app = Vue.createApp({
             this._load_for_view();
         },
 
-        goToDay(date_str) {
+        onBadgeBeforeLeave(el) {
+            // Pin the leaving badge to its current position before it goes position:absolute,
+            // otherwise it would snap to (0,0) of the container.
+            el.style.left = el.offsetLeft + 'px';
+            el.style.top  = el.offsetTop  + 'px';
+            el.style.width = el.offsetWidth + 'px';
+        },
+
+        goToDay(date_str, highlight_id = null) {
+            if (highlight_id != null) {
+                this.badges_animate = true;
+                // Cancel stale timers from a prior click so they can't kill this animation mid-flight
+                clearTimeout(this._badges_animate_timer);
+                clearTimeout(this._highlight_timer);
+            }
             this.current_date = date_str;
             this.view = 'day';
             this._load_for_view();
+            if (highlight_id != null) {
+                this.$nextTick(() => {
+                    this.highlight_entry_id = highlight_id;
+                    this._highlight_timer = setTimeout(() => { this.highlight_entry_id = null; }, 900);
+                    this._badges_animate_timer = setTimeout(() => { this.badges_animate = false; }, 3000);
+                });
+            }
         },
 
         _load_for_view() {
@@ -852,6 +951,31 @@ const app = Vue.createApp({
             this.conn.emit('delete_task', { id: t.id });
         },
 
+        onStartEdit(kind, item) {
+            if (kind === 'client')  this.admin_editing = { kind, id: item.id, name: item.name, notes: item.notes || '' };
+            if (kind === 'project') this.admin_editing = { kind, id: item.id, name: item.name, code: item.code || '',
+                                                           client_id: item.client_id, billable_default: !!item.billable_default };
+            if (kind === 'task')    this.admin_editing = { kind, id: item.id, name: item.name, project_id: item.project_id };
+        },
+
+        onCancelEdit() {
+            this.admin_editing = null;
+        },
+
+        onSaveEdit() {
+            const e = this.admin_editing;
+            if (!e || !e.name.trim()) return;
+            if (e.kind === 'client') {
+                this.conn.emit('update_client',  { id: e.id, name: e.name.trim(), notes: e.notes || null });
+            } else if (e.kind === 'project') {
+                this.conn.emit('update_project', { id: e.id, name: e.name.trim(), code: e.code || null,
+                                                   client_id: e.client_id, billable_default: e.billable_default ? 1 : 0 });
+            } else if (e.kind === 'task') {
+                this.conn.emit('update_task',    { id: e.id, name: e.name.trim(), project_id: e.project_id });
+            }
+            this.admin_editing = null;
+        },
+
         // ================================================================
         // Keyboard shortcuts
         // ================================================================
@@ -888,4 +1012,6 @@ const app = Vue.createApp({
 
 app.config.warnHandler = (msg) => console.warn('Vue:', msg);
 app.directive('focus', vFocus);
+app.component('live-secs',  LiveSecs);
+app.component('live-total', LiveTotal);
 app.mount('#vue-root');
