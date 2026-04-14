@@ -271,6 +271,7 @@
                             <input v-else v-model="editing.value" class="time-input"
                                    @keydown.enter="saveEdit" @keydown.escape="cancelEdit"
                                    @blur="saveEdit" placeholder="HH:MM" v-focus>
+                            <span class="text-muted">({{ break_duration(b) }})</span>
                             <button class="btn-icon break-del"
                                     :class="{armed: pending_break_del && pending_break_del.id===e.id && pending_break_del.bi===bi}"
                                     @click="onDeleteBreak(e, bi)"

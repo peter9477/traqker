@@ -495,6 +495,12 @@ const app = Vue.createApp({
         entry_gross_secs(e) { return gross_secs(e, Date.now()); },
         entry_break_secs(e) { return break_secs(e, Date.now()); },
         entry_net_secs(e)   { return net_secs(e, Date.now()); },
+        break_duration(b) {
+            if (!b.started_at) return '';
+            const end = b.ended_at ? parse_dt(b.ended_at).getTime() : live_now.t;
+            const secs = Math.max(0, Math.floor((end - parse_dt(b.started_at).getTime()) / 1000));
+            return fmt_duration(secs);
+        },
 
         // ================================================================
         // Display helpers
