@@ -706,6 +706,7 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
     cursor: pointer;
     &:hover { background: var(--bg-panel); }
     &.running { background: lighten(@success, 35%); html.dark & { background: darken(@success, 28%); } }
+    &.paused  { background: lighten(@warning, 35%); html.dark & { background: darken(@warning, 28%); } }
 }
 
 .we-time { color: var(--text-muted); font-variant-numeric: tabular-nums; }
@@ -764,9 +765,28 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
 }
 
 .running-dot {
-    font-size: 0.45em;
+    font-size: 0.55em;
     color: @success;
     vertical-align: middle;
+    display: inline-block;
+    transform-origin: center;
+    animation: running-pulse 5s ease-in-out infinite;
+    &.paused {
+        color: @warning;
+        animation: none;
+        opacity: 0.85;
+    }
+}
+
+@keyframes running-pulse {
+    0%, 100% { opacity: 0.55; transform: scale(1); }
+    50%      { opacity: 1;    transform: scale(1.13); }
+}
+
+// Month cell: suppress green tint when all runners are paused (brown tint instead)
+.month-cell.has-running.all-paused {
+    background: lighten(@warning, 32%);
+    html.dark & { background: darken(@warning, 28%); }
 }
 
 @keyframes flash-pulse {

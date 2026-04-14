@@ -74,7 +74,7 @@
              class="running-badge" :class="{paused: is_paused(e)}"
              @click="goToDay(date_of(e.started_at), e.id)"
              :title="'Go to ' + date_of(e.started_at)">
-            <i class="fas" :class="is_paused(e) ? 'fa-pause' : 'fa-circle'"></i>
+            <i class="fas" :class="is_paused(e) ? 'fa-pause' : 'fa-circle running-dot'"></i>
             <span class="rb-date">{{ fmt_mmdd(e.started_at) }}</span>
             <span class="rb-proj">{{ projects.find(p => p.id === e.project_id)?.name || '—' }}</span>
             <live-secs :entry="e"></live-secs>
@@ -130,6 +130,9 @@
 
                     <!-- Times (click to edit) -->
                     <div class="entry-times">
+                        <i v-if="is_running(e)" class="fas fa-circle running-dot"
+                           :class="{paused: is_paused(e)}"
+                           :title="is_paused(e) ? 'Paused' : 'Running'"></i>
                         <span class="entry-time clickable"
                               v-if="!(editing && editing.id===e.id && editing.field==='started_at')"
                               @click="editField(e, 'started_at')">
@@ -338,9 +341,13 @@
                         </span>
                     </div>
                     <div v-for="e in entries_for_day(day.date)" :key="e.id"
-                         class="week-entry" :class="{running: is_running(e)}"
+                         class="week-entry" :class="{running: is_running(e), paused: is_paused(e)}"
                          @click="goToDay(day.date)" title="Click to go to day view">
-                        <div class="we-time">{{ fmt_time(e.started_at) }}</div>
+                        <div class="we-time">
+                            <i v-if="is_running(e)" class="fas fa-circle running-dot"
+                               :class="{paused: is_paused(e)}"></i>
+                            {{ fmt_time(e.started_at) }}
+                        </div>
                         <div class="we-dur">
                             <live-secs v-if="is_running(e)" :entry="e"></live-secs>
                             <template v-else>{{ fmt_duration(entry_net_secs(e)) }}</template>
@@ -380,13 +387,15 @@
                              today: day && day.date === today,
                              empty: !day,
                              clickable: !!day,
-                             'has-running': day && entries_for_day(day.date).some(is_running)
+                             'has-running': day && entries_for_day(day.date).some(is_running),
+                             'all-paused': day && entries_for_day(day.date).some(is_running) && entries_for_day(day.date).filter(is_running).every(is_paused)
                          }"
                          @click="day && goToDay(day.date)">
                         <template v-if="day">
                             <span class="month-day-num">{{ day.dom }}</span>
                             <i v-if="entries_for_day(day.date).some(is_running)"
-                               class="fas fa-circle running-dot"></i>
+                               class="fas fa-circle running-dot"
+                               :class="{paused: entries_for_day(day.date).filter(is_running).every(is_paused)}"></i>
                             <span class="month-day-total" v-if="entries_for_day(day.date).length">
                                 <live-total :entries="entries_for_day(day.date)"></live-total>
                             </span>
