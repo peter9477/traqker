@@ -626,7 +626,12 @@ const app = Vue.createApp({
             if (!this.editing) return;
             const { project_id, task_id } = this.editing;
             this.editing = null;
-            this.conn.emit('update_entry', { id: e.id, project_id, task_id });
+            const payload = { id: e.id, project_id, task_id };
+            if (project_id !== e.project_id) {
+                const proj = this.projects.find(p => p.id === project_id);
+                if (proj) payload.billable = proj.billable_default ? 1 : 0;
+            }
+            this.conn.emit('update_entry', payload);
         },
 
         onEditProjectChange() {

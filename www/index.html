@@ -438,7 +438,10 @@
                     <td>{{ p.name }}</td>
                     <td class="text-muted">{{ p.code }}</td>
                     <td class="text-muted">{{ client_name(p.client_id) }}</td>
-                    <td><span v-if="!p.billable_default" class="badge warn">NB</span></td>
+                    <td>
+                        <i v-if="p.billable_default" class="fa fa-dollar-sign" title="Billable"></i>
+                        <span v-else class="badge warn">NB</span>
+                    </td>
                     <td><button @click="onDeleteProject(p)" class="btn-icon danger">✕</button></td>
                 </tr>
             </table>
