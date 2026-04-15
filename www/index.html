@@ -56,6 +56,10 @@
             <button v-if="dev" @click="reload()" title="Reload (dev)">
                 <i class="fas fa-rotate-right"></i>
             </button>
+            <button @click="toggleNotify" :class="{active: notify_enabled}"
+                    title="Toggle reminder notifications">
+                <i class="fas fa-bell"></i>
+            </button>
             <button class="dark-toggle" @click="toggleDark" title="Toggle dark mode">
                 <i class="fas fa-circle-half-stroke"></i>
             </button>

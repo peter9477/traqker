@@ -70,6 +70,19 @@ Unhandled server error (message handler threw).
 {"_t":"error","text":"Server error in start_entry"}
 ```
 
+### `notify`
+Server-initiated reminder. Broadcast to all connected clients; each client
+decides independently whether to surface it as a browser notification based
+on its local `notify_enabled` setting.
+
+`kind` values:
+- `"running_late"` — a timer started before 17:00 is still running at/after 19:00; `entry_id` is set.
+- `"post_break_gap"` — no running timer, had morning activity, ≥2 h since last stop; `entry_id` is null.
+
+```json
+{"_t":"notify","kind":"running_late","title":"Timer still running","body":"A timer started before 17:00 is still running.","entry_id":42}
+```
+
 ---
 
 ## Client → Server

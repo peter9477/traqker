@@ -220,6 +220,9 @@ const app = Vue.createApp({
             // Privacy
             show_private: false,
 
+            // Notifications
+            notify_enabled: false,
+
             // Admin panel
             show_admin: false,
             admin_tab:  'clients',
@@ -230,6 +233,9 @@ const app = Vue.createApp({
     },
 
     mounted() {
+        // Notifications
+        this.notify_enabled = localStorage.getItem('notify_enabled') === 'true';
+
         // Dark mode
         const savedDark = localStorage.getItem('darkMode');
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -476,6 +482,17 @@ const app = Vue.createApp({
 
         _msg_error(msg) {
             this.toast(msg.text || 'Server error', 'danger');
+        },
+
+        _msg_notify(msg) {
+            if (!('Notification' in window)) return;
+            if (Notification.permission !== 'granted') return;
+            if (!this.notify_enabled) return;
+            const n = new Notification(msg.title, {
+                body: msg.body,
+                tag:  `${msg.kind}:${msg.entry_id ?? ''}`,
+            });
+            n.onclick = () => { window.focus(); n.close(); };
         },
 
         // ================================================================
@@ -1000,6 +1017,24 @@ const app = Vue.createApp({
         toggleDark() {
             const dark = document.documentElement.classList.toggle('dark');
             localStorage.setItem('darkMode', dark);
+        },
+
+        async toggleNotify() {
+            if (!('Notification' in window)) {
+                this.toast('Notifications not supported by this browser', 'warning');
+                return;
+            }
+            if (Notification.permission === 'denied') {
+                this.toast('Notifications are blocked — enable them in browser site settings', 'warning');
+                return;
+            }
+            if (Notification.permission === 'default') {
+                const perm = await Notification.requestPermission();
+                if (perm !== 'granted') return;
+            }
+            this.notify_enabled = !this.notify_enabled;
+            localStorage.setItem('notify_enabled', this.notify_enabled);
+            this.toast(this.notify_enabled ? 'Reminders enabled' : 'Reminders disabled', 'info', 2500);
         },
 
         toast(message, level = 'info', ms = 5000) {

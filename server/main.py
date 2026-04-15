@@ -28,6 +28,7 @@ from aiohttp import web
 sys.path.insert(0, str(Path(__file__).parent))
 from db import DB
 from csv_export import export_csv
+from reminders import reminder_loop
 
 VERSION = '0.1.0'
 WWW = Path(__file__).parent.parent / 'www'
@@ -319,7 +320,7 @@ class Client:
 
 async def ws_handler(request):
     db: DB = request.app['db']
-    ws = web.WebSocketResponse()
+    ws = web.WebSocketResponse(heartbeat=30)
     await ws.prepare(request)
 
     client = Client(ws, db)
@@ -352,9 +353,17 @@ async def on_startup(app):
     await db.init(app['db_path'])
     app['db'] = db
     log.info(f'database: {app["db_path"]}')
+    app['reminder_task'] = asyncio.create_task(reminder_loop(db, Client.broadcast))
 
 
 async def on_cleanup(app):
+    task = app.get('reminder_task')
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     await app['db'].close()
 
 
