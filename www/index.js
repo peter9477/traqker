@@ -250,6 +250,12 @@ const app = Vue.createApp({
         });
         this.conn.open(ws_url());
 
+        // Keep `today` fresh across midnight rollover
+        this._today_timer = setInterval(() => {
+            const t = local_date_str(new Date());
+            if (t !== this.today) this.today = t;
+        }, 60_000);
+
         // Keyboard shortcuts
         document.addEventListener('keydown', e => this.onKeydown(e));
 
