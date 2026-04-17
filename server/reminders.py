@@ -38,6 +38,7 @@ NO_ACTIVITY_BY_HOUR = 12          # noon
 # POST_BREAK_MORNING_BEFORE today, most recent stop >= POST_BREAK_GAP_HOURS ago.
 POST_BREAK_MORNING_BEFORE = 12    # noon
 POST_BREAK_GAP_HOURS      = 2
+POST_BREAK_LATEST_HOUR    = 17    # 5 pm — silent after typical end of day
 
 # ------------------------------------------------------------------------------
 
@@ -64,6 +65,8 @@ async def reminder_loop(db, broadcast):
 
             # Reset dedup set at local midnight
             if today != last_date:
+                if fired:
+                    log.info(f'daily reset: clearing {len(fired)} reminder key(s)')
                 fired.clear()
                 last_date = today
 
@@ -94,6 +97,11 @@ async def reminder_loop(db, broadcast):
                                       f'is still running.'),
                                 entry_id=e['id'],
                             )
+                    else:
+                        skip_key = ('running_late_skip', today_str, e['id'])
+                        if skip_key not in fired:
+                            fired.add(skip_key)
+                            log.info(f'skip running_late entry {e["id"]}: started {started:%a at %H:%M}, not eligible')
 
             # -- Rule: running_very_late ---------------------------------------
             # Second escalation at 22:00 if the timer has been going >= 4h.
@@ -134,6 +142,11 @@ async def reminder_loop(db, broadcast):
                                   f'{hours:.0f}h.'),
                             entry_id=e['id'],
                         )
+                elif not _is_weekday(started.date()) and hours >= RUNAWAY_HOURS:
+                    skip_key = ('runaway_skip', today_str, e['id'])
+                    if skip_key not in fired:
+                        fired.add(skip_key)
+                        log.info(f'skip runaway entry {e["id"]}: started {started:%A} (non-weekday), {hours:.1f}h running')
 
             # -- Weekday-only rules below --------------------------------------
             if not _is_weekday(today):
@@ -168,16 +181,22 @@ async def reminder_loop(db, broadcast):
                         last_stop_dt  = datetime.fromisoformat(last_stop_str)
                         gap_hours     = (now - last_stop_dt).total_seconds() / 3600
                         if gap_hours >= POST_BREAK_GAP_HOURS:
-                            fired.add(key2)
-                            log.info(f'reminder post_break_gap: {gap_hours:.1f}h since last stop')
-                            await broadcast(
-                                _t='notify',
-                                kind='post_break_gap',
-                                title='Did you forget to start a timer?',
-                                body=(f'No timer running — last one stopped '
-                                      f'{gap_hours:.0f}h ago.'),
-                                entry_id=None,
-                            )
+                            if now.hour >= POST_BREAK_LATEST_HOUR:
+                                skip_key = ('post_break_gap_eod', today_str, 0)
+                                if skip_key not in fired:
+                                    fired.add(skip_key)
+                                    log.info(f'skip post_break_gap: {gap_hours:.1f}h gap suppressed by end-of-day cutoff')
+                            else:
+                                fired.add(key2)
+                                log.info(f'reminder post_break_gap: {gap_hours:.1f}h since last stop')
+                                await broadcast(
+                                    _t='notify',
+                                    kind='post_break_gap',
+                                    title='Did you forget to start a timer?',
+                                    body=(f'No timer running — last one stopped '
+                                          f'{gap_hours:.0f}h ago.'),
+                                    entry_id=None,
+                                )
 
         except asyncio.CancelledError:
             raise
