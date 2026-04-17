@@ -516,11 +516,18 @@ const app = Vue.createApp({
 
         _msg_notify(msg) {
             const tag = `${msg.kind}:${msg.entry_id ?? ''}`;
-            if (!this.active_notifs.some(n => n.tag === tag)) {
-                this.active_notifs.push({
-                    kind: msg.kind, entry_id: msg.entry_id ?? null,
-                    title: msg.title, body: msg.body, tag,
-                });
+            if (msg.entry_id != null) {
+                // One notification per entry — incoming supersedes any prior kind.
+                for (const old of this.active_notifs.filter(n => n.entry_id === msg.entry_id)) {
+                    const os = this._osNotifs.get(old.tag);
+                    if (os) { os.close(); this._osNotifs.delete(old.tag); }
+                }
+                this.active_notifs = this.active_notifs.filter(n => n.entry_id !== msg.entry_id);
+                this.active_notifs.push({ kind: msg.kind, entry_id: msg.entry_id,
+                                          title: msg.title, body: msg.body, tag });
+            } else if (!this.active_notifs.some(n => n.tag === tag)) {
+                this.active_notifs.push({ kind: msg.kind, entry_id: null,
+                                          title: msg.title, body: msg.body, tag });
             }
             if (!('Notification' in window)) return;
             if (Notification.permission !== 'granted') return;
