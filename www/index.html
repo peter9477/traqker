@@ -85,6 +85,16 @@
         </div>
     </transition-group>
 
+    <!-- In-app notification strip — shows while notifications are still relevant -->
+    <div v-if="notif_relevant.length" class="notif-strip hbox" @click="dismissNotifs">
+        <i class="fas fa-bell"></i>
+        <span class="notif-bodies">
+            <span v-for="(n, i) in notif_relevant" :key="n.tag"
+                  ><span v-if="i > 0" class="notif-sep"> · </span>{{ n.body }}</span>
+        </span>
+        <i class="fas fa-times"></i>
+    </div>
+
     <!-- ================================================================
          Main content
          ================================================================ -->

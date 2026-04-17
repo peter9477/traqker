@@ -394,6 +394,23 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
     .rb-proj   { font-weight: 600; }
 }
 
+.notif-strip {
+    flex: none;
+    align-items: center;
+    gap: 0.6em;
+    padding: 0.3em 0.7em;
+    border-bottom: 1px solid var(--border);
+    background: lighten(@warning, 38%);
+    cursor: pointer;
+    font-size: 0.88em;
+    html.dark & { background: darken(@warning, 32%); }
+    &:hover { filter: brightness(94%); }
+    .fa-bell  { flex: none; color: @warning; }
+    .fa-times { flex: none; margin-left: auto; opacity: 0.55; }
+    .notif-bodies { flex: 1; }
+    .notif-sep { opacity: 0.5; }
+}
+
 
 // ---- Start form ----
 

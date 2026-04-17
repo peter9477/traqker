@@ -221,7 +221,8 @@ const app = Vue.createApp({
             show_private: false,
 
             // Notifications
-            notify_enabled: false,
+            notify_enabled:  false,
+            active_notifs:   [],  // {kind, entry_id, title, body, tag} — cleared on dismiss
 
             // Admin panel
             show_admin: false,
@@ -235,6 +236,7 @@ const app = Vue.createApp({
     mounted() {
         // Notifications
         this.notify_enabled = localStorage.getItem('notify_enabled') === 'true';
+        this._osNotifs = new Map();   // tag → Notification — kept off reactive data
 
         // Dark mode
         const savedDark = localStorage.getItem('darkMode');
@@ -278,6 +280,16 @@ const app = Vue.createApp({
             return this.entries
                 .filter(e => e.ended_at === null)
                 .sort((a, b) => a.started_at.localeCompare(b.started_at));
+        },
+
+        notif_relevant() {
+            return this.active_notifs.filter(n => {
+                if (n.entry_id !== null)
+                    return this.active_entries.some(e => e.id === n.entry_id);
+                if (n.kind === 'no_activity')
+                    return this.day_entries.length === 0;
+                return this.active_entries.length === 0;  // post_break_gap
+            });
         },
 
         running_elsewhere() {
@@ -400,6 +412,18 @@ const app = Vue.createApp({
         },
     },
 
+    watch: {
+        notif_relevant(newList, oldList) {
+            const keep = new Set(newList.map(n => n.tag));
+            for (const n of oldList) {
+                if (!keep.has(n.tag)) {
+                    const osNotif = this._osNotifs.get(n.tag);
+                    if (osNotif) { osNotif.close(); this._osNotifs.delete(n.tag); }
+                }
+            }
+        },
+    },
+
     methods: {
 
         // ================================================================
@@ -491,14 +515,20 @@ const app = Vue.createApp({
         },
 
         _msg_notify(msg) {
+            const tag = `${msg.kind}:${msg.entry_id ?? ''}`;
+            if (!this.active_notifs.some(n => n.tag === tag)) {
+                this.active_notifs.push({
+                    kind: msg.kind, entry_id: msg.entry_id ?? null,
+                    title: msg.title, body: msg.body, tag,
+                });
+            }
             if (!('Notification' in window)) return;
             if (Notification.permission !== 'granted') return;
             if (!this.notify_enabled) return;
-            const n = new Notification(msg.title, {
-                body: msg.body,
-                tag:  `${msg.kind}:${msg.entry_id ?? ''}`,
-            });
-            n.onclick = () => { window.focus(); n.close(); };
+            const n = new Notification(msg.title, { body: msg.body, tag });
+            this._osNotifs.set(tag, n);
+            n.onclick  = () => { window.focus(); n.close(); this.notifClicked(tag); };
+            n.onclose  = () => { this._osNotifs.delete(tag); };
         },
 
         // ================================================================
@@ -1041,6 +1071,22 @@ const app = Vue.createApp({
             this.notify_enabled = !this.notify_enabled;
             localStorage.setItem('notify_enabled', this.notify_enabled);
             this.toast(this.notify_enabled ? 'Reminders enabled' : 'Reminders disabled', 'info', 2500);
+        },
+
+        notifClicked(tag) {
+            const notif = this.active_notifs.find(n => n.tag === tag);
+            if (notif?.entry_id != null) {
+                const entry = this.active_entries.find(e => e.id === notif.entry_id)
+                           || this.entries.find(e => e.id === notif.entry_id);
+                if (entry) this.goToDay(date_of(entry.started_at), notif.entry_id);
+            }
+            this.active_notifs = this.active_notifs.filter(n => n.tag !== tag);
+        },
+
+        dismissNotifs() {
+            for (const osNotif of this._osNotifs.values()) osNotif.close();
+            this._osNotifs.clear();
+            this.active_notifs = [];
         },
 
         toast(message, level = 'info', ms = 5000) {
