@@ -418,7 +418,7 @@ const app = Vue.createApp({
             for (const n of oldList) {
                 if (!keep.has(n.tag)) {
                     const osNotif = this._osNotifs.get(n.tag);
-                    if (osNotif) { osNotif.close(); this._osNotifs.delete(n.tag); }
+                    if (osNotif) { console.log('notify retracted:', n.tag); osNotif.close(); this._osNotifs.delete(n.tag); }
                 }
             }
         },
@@ -529,13 +529,14 @@ const app = Vue.createApp({
                 this.active_notifs.push({ kind: msg.kind, entry_id: null,
                                           title: msg.title, body: msg.body, tag });
             }
-            if (!('Notification' in window)) return;
-            if (Notification.permission !== 'granted') return;
-            if (!this.notify_enabled) return;
+            if (!('Notification' in window)) { console.log('notify suppressed (no API):', tag); return; }
+            if (Notification.permission !== 'granted') { console.log('notify suppressed (permission denied):', tag); return; }
+            if (!this.notify_enabled) { console.log('notify suppressed (disabled):', tag); return; }
             const n = new Notification(msg.title, { body: msg.body, tag });
+            console.log('notify shown:', tag);
             this._osNotifs.set(tag, n);
-            n.onclick  = () => { window.focus(); n.close(); this.notifClicked(tag); };
-            n.onclose  = () => { this._osNotifs.delete(tag); };
+            n.onclick  = () => { console.log('notify clicked:', tag); window.focus(); n.close(); this.notifClicked(tag); };
+            n.onclose  = () => { console.log('notify closed:', tag); this._osNotifs.delete(tag); };
         },
 
         // ================================================================
