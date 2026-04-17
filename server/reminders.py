@@ -10,6 +10,11 @@ log = logging.getLogger(__name__)
 
 TICK_SECONDS = 60
 
+# Quiet hours: suppress all notifications from QUIET_FROM until QUIET_UNTIL (local).
+# Dedup-set reset at midnight still happens so rules re-fire cleanly once quiet ends.
+QUIET_FROM  = 23   # 11 pm
+QUIET_UNTIL = 8    # 8 am
+
 # Rule: running_late
 # A timer that started on a weekday before RUNNING_LATE_STARTED_BEFORE is still
 # running at or after RUNNING_LATE_AFTER. Fires once per entry per day.
@@ -69,6 +74,9 @@ async def reminder_loop(db, broadcast):
                     log.info(f'daily reset: clearing {len(fired)} reminder key(s)')
                 fired.clear()
                 last_date = today
+
+            if now.hour >= QUIET_FROM or now.hour < QUIET_UNTIL:
+                continue
 
             today_str   = today.isoformat()
             today_start = today_str + 'T00:00:00'
