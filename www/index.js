@@ -619,14 +619,29 @@ const app = Vue.createApp({
         // ================================================================
 
         onStart() {
+            // Seed project/task/billable from the most recently ended entry on
+            // the current page. If none, start with no project.
+            const ended = this.day_entries
+                .filter(e => e.ended_at !== null)
+                .sort((a, b) => b.ended_at.localeCompare(a.ended_at));
+            const seed = ended[0];
             this.conn.emit('start_entry', {
-                project_id:  this.form.project_id,
-                task_id:     this.form.task_id,
-                description: this.form.description,
-                billable:    this.form.billable ? 1 : 0,
+                project_id:  seed ? seed.project_id : null,
+                task_id:     seed ? seed.task_id    : null,
+                description: '',
+                billable:    seed ? (seed.billable ? 1 : 0) : 1,
                 travel:      0,
             });
-            this.form.description = '';
+        },
+
+        onRestart(e) {
+            this.conn.emit('start_entry', {
+                project_id:  e.project_id,
+                task_id:     e.task_id,
+                description: '',
+                billable:    e.billable ? 1 : 0,
+                travel:      e.travel  ? 1 : 0,
+            });
         },
 
         onAdd() {

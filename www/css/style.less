@@ -583,7 +583,11 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
 .btn-icon {
     padding: 0.1em 0.4em;
     font-size: 0.85em;
-    &.danger { color: @danger; }
+    &.danger  { color: @danger; }
+    &.btn-restart {
+        color: @success;
+        margin-right: 0.8em;
+    }
 }
 
 .split-form {

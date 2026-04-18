@@ -231,6 +231,11 @@
 
                     <!-- Controls -->
                     <div class="entry-controls hbox">
+                        <button v-if="!is_running(e)" @click="onRestart(e)"
+                                class="btn-icon btn-restart"
+                                title="Start new timer with same project/task">
+                            <i class="fas fa-arrow-rotate-right"></i>
+                        </button>
                         <button @click="onAddBreakBegin(e)" class="btn-icon" title="Add break">
                             <i class="fas fa-coffee"></i>
                         </button>
