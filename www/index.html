@@ -339,6 +339,7 @@
                     <span class="text-muted" v-if="billable_day_entries.length < day_entries.length">
                         (<live-total :entries="billable_day_entries"></live-total> billable)
                     </span>
+                    <span class="text-muted" v-else>(all billable)</span>
                 </div>
                 <div class="hbox" style="margin-top:0.5em">
                     <button @click="onExportDay">
@@ -386,6 +387,7 @@
                     <span class="text-muted" v-if="billable_week_entries.length < week_entries.length">
                         (<live-total :entries="billable_week_entries"></live-total> billable)
                     </span>
+                    <span class="text-muted" v-else-if="week_entries.length">(all billable)</span>
                 </span>
                 <button @click="onExportWeek" style="margin-left:1em">
                     <i class="fas fa-download"></i> Export CSV (this week)
@@ -427,6 +429,7 @@
                     <span class="text-muted" v-if="billable_month_entries.length < month_entries.length">
                         (<live-total :entries="billable_month_entries"></live-total> billable)
                     </span>
+                    <span class="text-muted" v-else-if="month_entries.length">(all billable)</span>
                 </span>
                 <button @click="onExportMonth" style="margin-left:1em">
                     <i class="fas fa-download"></i> Export CSV (this month)
