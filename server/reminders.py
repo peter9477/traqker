@@ -15,6 +15,11 @@ TICK_SECONDS = 60
 QUIET_FROM  = 23   # 11 pm
 QUIET_UNTIL = 8    # 8 am
 
+# Entries started before WAKING_HOUR are treated as overnight carry-over from the
+# previous workday, not as today's activity. Used by no_activity and
+# post_break_gap so reminders key on the user's waking day, not the calendar day.
+WAKING_HOUR = 6
+
 # Rule: running_late
 # A timer that started on a weekday before RUNNING_LATE_STARTED_BEFORE is still
 # running at or after RUNNING_LATE_AFTER. Fires once per entry per day.
@@ -39,8 +44,9 @@ RUNAWAY_HOURS = 8
 NO_ACTIVITY_BY_HOUR = 12          # noon
 
 # Rule: post_break_gap
-# Weekdays only. No timer running, at least one completed entry started before
-# POST_BREAK_MORNING_BEFORE today, most recent stop >= POST_BREAK_GAP_HOURS ago.
+# Weekdays only. No timer running, at least one completed entry from today's
+# workday started before POST_BREAK_MORNING_BEFORE, most recent stop
+# >= POST_BREAK_GAP_HOURS ago.
 POST_BREAK_MORNING_BEFORE = 12    # noon
 POST_BREAK_GAP_HOURS      = 2
 POST_BREAK_LATEST_HOUR    = 17    # 5 pm — silent after typical end of day
@@ -50,6 +56,13 @@ POST_BREAK_LATEST_HOUR    = 17    # 5 pm — silent after typical end of day
 
 def _is_weekday(d: date) -> bool:
     return d.weekday() < 5   # Mon=0 … Fri=4
+
+
+def _is_todays_workday(e: dict, today: date) -> bool:
+    """True if entry started today at/after WAKING_HOUR — i.e. part of today's
+    waking workday, not an overnight tail from the previous day."""
+    started = datetime.fromisoformat(e['started_at'])
+    return started.date() == today and started.hour >= WAKING_HOUR
 
 
 async def reminder_loop(db, broadcast):
@@ -163,7 +176,11 @@ async def reminder_loop(db, broadcast):
             # -- Rule: no_activity ---------------------------------------------
             if now.hour >= NO_ACTIVITY_BY_HOUR:
                 key = ('no_activity', today_str, 0)
-                if key not in fired and not all_today and not running:
+                workday_entries = [
+                    e for e in all_today + running
+                    if _is_todays_workday(e, today)
+                ]
+                if key not in fired and not workday_entries:
                     fired.add(key)
                     log.info('reminder no_activity')
                     await broadcast(
@@ -180,10 +197,14 @@ async def reminder_loop(db, broadcast):
                 morning_entries = [
                     e for e in all_today
                     if e['ended_at'] is not None
+                    and _is_todays_workday(e, today)
                     and datetime.fromisoformat(e['started_at']).hour < POST_BREAK_MORNING_BEFORE
                 ]
                 if morning_entries:
-                    completed = [e for e in all_today if e['ended_at'] is not None]
+                    completed = [
+                        e for e in all_today
+                        if e['ended_at'] is not None and _is_todays_workday(e, today)
+                    ]
                     if completed:
                         last_stop_str = max(e['ended_at'] for e in completed)
                         last_stop_dt  = datetime.fromisoformat(last_stop_str)
