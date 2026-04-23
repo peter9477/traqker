@@ -294,6 +294,17 @@
                                    @keydown.enter="saveEdit" @keydown.escape="cancelEdit"
                                    @blur="saveEdit" placeholder="HH:MM" v-focus>
                             <span class="text-muted">({{ break_duration(b) }})</span>
+                            <span v-if="!(editing && editing.id===e.id && editing.field==='break_note' && editing.break_index===bi)"
+                                  class="break-note clickable"
+                                  :class="{'has-note': b.note}"
+                                  :title="b.note ? 'Edit note' : 'Add note'"
+                                  @click="editField(e, 'break_note', bi)">
+                                <template v-if="b.note">{{ b.note }}</template>
+                                <i v-else class="fas fa-pen break-note-icon"></i>
+                            </span>
+                            <input v-else v-model="editing.value" class="break-note-input"
+                                   @keydown.enter="saveEdit" @keydown.escape="cancelEdit"
+                                   @blur="saveEdit" placeholder="note" v-focus>
                             <button class="btn-icon break-del"
                                     :class="{armed: pending_break_del && pending_break_del.id===e.id && pending_break_del.bi===bi}"
                                     @click="onDeleteBreak(e, bi)"
@@ -312,6 +323,9 @@
                         <span>–</span>
                         <input v-model="adding_break.ended_at" class="time-input"
                                placeholder="HH:MM" @keydown.enter="onAddBreakConfirm(e)"
+                               @keydown.escape="adding_break = null">
+                        <input v-model="adding_break.note" class="break-note-input"
+                               placeholder="Note (optional)" @keydown.enter="onAddBreakConfirm(e)"
                                @keydown.escape="adding_break = null">
                         <button @click="onAddBreakConfirm(e)">Add</button>
                         <button @click="adding_break = null">Cancel</button>

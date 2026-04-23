@@ -238,7 +238,7 @@ class Client:
                 breaks_b.append(b)
             elif b['ended_at'] is None or b['ended_at'] > split_at:
                 # Break straddles split point — truncate at split
-                breaks_a.append({'started_at': b['started_at'], 'ended_at': split_at})
+                breaks_a.append({**b, 'ended_at': split_at})
             else:
                 breaks_a.append(b)
 

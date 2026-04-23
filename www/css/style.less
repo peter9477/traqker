@@ -601,6 +601,11 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
     margin-top: 0.2em;
 }
 
+.break-note-input {
+    width: 9em;
+    font-size: 0.9em;
+}
+
 .breaks-row {
     width: 100%;
     display: flex;
@@ -620,6 +625,23 @@ body.hilite *:nth-child(even) { border: 1px dashed #5F9EA0 !important; }
     padding: 0 0.3em;
 
     .time-input { width: 3.5em; font-size: 0.9em; }
+
+    .break-note {
+        font-style: italic;
+        color: var(--text-muted);
+        margin-left: 0.3em;
+        max-width: 14em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+
+        .break-note-icon {
+            font-size: 0.7em;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+    }
+    &:hover .break-note-icon { opacity: 0.45; }
 
     .break-del {
         margin-left: 0.6em;

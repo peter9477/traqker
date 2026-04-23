@@ -212,7 +212,7 @@ const app = Vue.createApp({
             splitting: null,  // {id, value}
 
             // Add-break inline form
-            adding_break: null,  // {id, started_at, ended_at}
+            adding_break: null,  // {id, started_at, ended_at, note}
 
             // Two-step break delete
             pending_break_del: null,  // {id, bi}
@@ -731,6 +731,11 @@ const app = Vue.createApp({
                     id: e.id, field, break_index,
                     value: t ? fmt_time(t) : '',
                 };
+            } else if (field === 'break_note') {
+                this.editing = {
+                    id: e.id, field, break_index,
+                    value: e.breaks[break_index].note || '',
+                };
             } else {
                 this.editing = { id: e.id, field, value: e[field] || '' };
             }
@@ -748,6 +753,16 @@ const app = Vue.createApp({
                 const breaks = entry.breaks.map(b => ({ ...b }));
                 const key = (field === 'break_start') ? 'started_at' : 'ended_at';
                 breaks[break_index][key] = resolve_time_after(entry.started_at, value);
+                this.conn.emit('update_entry', { id, breaks });
+            } else if (field === 'break_note') {
+                const entry = this.entries.find(x => x.id === id);
+                if (!entry) return;
+                const breaks = entry.breaks.map(b => ({ ...b }));
+                if (value.trim()) {
+                    breaks[break_index].note = value.trim();
+                } else {
+                    delete breaks[break_index].note;
+                }
                 this.conn.emit('update_entry', { id, breaks });
             } else if (field === 'started_at' || field === 'ended_at') {
                 if (!value || !value.match(/^\d{1,2}:\d{2}$/)) return;
@@ -827,11 +842,11 @@ const app = Vue.createApp({
 
         onAddBreakBegin(e) {
             this.splitting = null;
-            this.adding_break = { id: e.id, started_at: '', ended_at: '' };
+            this.adding_break = { id: e.id, started_at: '', ended_at: '', note: '' };
         },
 
         onAddBreakConfirm(e) {
-            const { started_at, ended_at } = this.adding_break;
+            const { started_at, ended_at, note } = this.adding_break;
             this.adding_break = null;
             const rx = /^\d{1,2}:\d{2}$/;
             if (!started_at.match(rx) || !ended_at.match(rx)) {
@@ -844,7 +859,9 @@ const app = Vue.createApp({
                 this.toast('Break must be within the entry bounds.', 'warning');
                 return;
             }
-            const breaks = [...(e.breaks || []), { started_at: bs, ended_at: be }]
+            const newBreak = { started_at: bs, ended_at: be };
+            if (note && note.trim()) newBreak.note = note.trim();
+            const breaks = [...(e.breaks || []), newBreak]
                 .sort((a, b) => a.started_at.localeCompare(b.started_at));
             this.conn.emit('update_entry', { id: e.id, breaks });
         },
