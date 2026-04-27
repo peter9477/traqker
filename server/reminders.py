@@ -34,9 +34,11 @@ RUNNING_VERY_LATE_AFTER     = 22   # 10 pm
 RUNNING_VERY_LATE_MIN_HOURS = 4
 
 # Rule: runaway
-# A timer that started on a weekday has been running for RUNAWAY_HOURS or more.
-# Fires once per entry per day (resets at midnight — will re-fire if still running
-# the next day, but by then running_late/very_late will also be firing).
+# A timer has been running for RUNAWAY_HOURS or more, and either started on a
+# weekday or has crossed midnight into a new day. The weekend grace is intentional
+# — a long Saturday timer for personal work shouldn't fire — but once the timer
+# crosses into a new day it's almost certainly forgotten. Fires once per entry
+# per day (resets at midnight).
 RUNAWAY_HOURS = 8
 
 # Rule: no_activity
@@ -146,28 +148,33 @@ async def reminder_loop(db, broadcast):
                             )
 
             # -- Rule: runaway -------------------------------------------------
-            # Any time of day, any day, if the timer started on a weekday.
+            # Fires if the timer started on a weekday, OR it has crossed midnight
+            # into a new day (so a forgotten weekend timer alerts once it's run
+            # overnight). running_very_late at 22:00 still covers same-day weekend
+            # cases ≥4h.
             for e in running:
                 started = datetime.fromisoformat(e['started_at'])
                 hours   = (now - started).total_seconds() / 3600
-                if _is_weekday(started.date()) and hours >= RUNAWAY_HOURS:
-                    key = ('runaway', today_str, e['id'])
-                    if key not in fired:
-                        fired.add(key)
-                        log.info(f'reminder runaway: entry {e["id"]} ({hours:.1f}h)')
-                        await broadcast(
-                            _t='notify',
-                            kind='runaway',
-                            title='Timer running very long',
-                            body=(f'A timer has been running for '
-                                  f'{hours:.0f}h.'),
-                            entry_id=e['id'],
-                        )
-                elif not _is_weekday(started.date()) and hours >= RUNAWAY_HOURS:
-                    skip_key = ('runaway_skip', today_str, e['id'])
-                    if skip_key not in fired:
-                        fired.add(skip_key)
-                        log.info(f'skip runaway entry {e["id"]}: started {started:%A} (non-weekday), {hours:.1f}h running')
+                if hours >= RUNAWAY_HOURS:
+                    eligible = _is_weekday(started.date()) or today != started.date()
+                    if eligible:
+                        key = ('runaway', today_str, e['id'])
+                        if key not in fired:
+                            fired.add(key)
+                            log.info(f'reminder runaway: entry {e["id"]} ({hours:.1f}h)')
+                            await broadcast(
+                                _t='notify',
+                                kind='runaway',
+                                title='Timer running very long',
+                                body=(f'A timer has been running for '
+                                      f'{hours:.0f}h.'),
+                                entry_id=e['id'],
+                            )
+                    else:
+                        skip_key = ('runaway_skip', today_str, e['id'])
+                        if skip_key not in fired:
+                            fired.add(skip_key)
+                            log.info(f'skip runaway entry {e["id"]}: started {started:%A} (non-weekday, same day), {hours:.1f}h running')
 
             # -- Weekday-only rules below --------------------------------------
             if not _is_weekday(today):
